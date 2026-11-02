@@ -193,6 +193,30 @@ await t('AI臭さチェック NG 0', () => {
 const browser = await chromium.launch({ ...MUTE_LAUNCH, args: [...MUTE_LAUNCH.args, ...GL] })
 const p = await open(browser)
 await t('起動時にエラーが出ない', async () => { expect(p.errs.length === 0, p.errs.join('|')) })
+await t('ロード画面（2026-11-03 本人「開いた最初に、いい感じのロード中の画面を」）: 開いた瞬間に世界観の絵と文字と進み具合が出て、読み込み（人物の GLB）が終わるまで消えない。終わったら消える', async () => {
+  const ctx = await browser.newContext({ locale: 'ja-JP', viewport: { width: 390, height: 844 } }); await muteContext(ctx)
+  let release; const gate = new Promise(r => { release = r })
+  await ctx.route('**/assets/chars/Ranger.glb*', async route => { await gate; await route.continue() })   // 人物の読み込みを止めておく
+  const q = await ctx.newPage(); const errs = []; q.on('pageerror', e => errs.push(e.message))
+  await q.goto(URL0, { waitUntil: 'domcontentloaded' })
+  const first = await q.evaluate(() => { const b = document.getElementById('boot'); const r = b.getBoundingClientRect(); return { shown: r.width > 0 && !b.classList.contains('hidden'), msg: b.querySelector('.boot-msg').textContent, art: !!b.querySelector('svg') } })
+  await q.waitForTimeout(2500)
+  const mid = await q.evaluate(() => ({ shown: !document.getElementById('boot').classList.contains('hidden'), ready: !!window.__catchReady, pct: document.getElementById('bootPct').textContent }))
+  release()
+  await q.waitForFunction(() => window.__catchReady, null, { timeout: 30000 }); await q.waitForTimeout(600)
+  const after = await q.evaluate(() => ({ hidden: document.getElementById('boot').classList.contains('hidden'), pct: document.getElementById('bootPct').textContent, err: !!document.getElementById('boot-err') }))
+  await ctx.close()
+  expect(first.shown && first.art && first.msg.length >= 6 && mid.shown && !mid.ready && parseInt(mid.pct) > 0 && parseInt(mid.pct) < 100 && after.hidden && after.pct === '100%' && !after.err && !errs.length, JSON.stringify({ first, mid, after, errs })); return { msg: first.msg, mid: mid.pct }
+})
+await t('起動失敗の保険: 本体のファイルが読めないと、9秒で原因の表示が出る', async () => {
+  const ctx = await browser.newContext({ locale: 'ja-JP', viewport: { width: 390, height: 844 } }); await muteContext(ctx)
+  await ctx.route('**/js/fx.js*', route => route.fulfill({ status: 404, body: 'nope' }))
+  const q = await ctx.newPage(); await q.goto(URL0)
+  await q.waitForSelector('#boot-err', { timeout: 15000 }).catch(() => null)
+  const r = await q.evaluate(() => { const d = document.getElementById('boot-err'); return { shown: !!d, text: d ? d.textContent.slice(0, 80) : '' } })
+  await ctx.close()
+  expect(r.shown && /起動できません/.test(r.text), JSON.stringify(r)); return r
+})
 await t('ブラウザの拡大が起きない', async () => {
   const r = await p.evaluate(() => {
     const g = new Event('gesturestart', { cancelable: true }); document.dispatchEvent(g)
@@ -211,6 +235,20 @@ await t('出動: 救助000・時計・巻取ボタン無し・最初の人がぐ
   await p.evaluate(() => { sky.dbg.pause(true); sky.dbg.step(60 * 3.5) })
   const r = await p.evaluate(() => ({ n: document.getElementById('cNum').textContent, w: +document.getElementById('wNum').textContent, reel: !!document.querySelector('[data-k=reel]'), f: sky.rd.fallers.length, guide: !document.getElementById('arrow').classList.contains('hidden') || document.querySelectorAll('#bubbles .bub').length > 0 }))
   expect(r.n === '000' && r.w <= 90 && r.w >= 85 && !r.reel && r.f >= 1 && r.guide, r); return r
+})
+await t('音（2026-11-03 本人「謎の水の音がずっと鳴ってる」）: 鳴りっぱなしは BGM・街の音・風の3つだけ。風は録音のループ（WAV）で、地面では0、空中で速い時だけ鳴り、上限 0.35', async () => {
+  await p.waitForFunction(() => Snd.loops.wind && Snd.loops.wind.g, null, { timeout: 10000 }).catch(() => {})   // ループは読み込み後に鳴り始める
+  const r = await p.evaluate(() => {
+    const me = sky.me, wl = Snd.loops.wind, slots = Object.keys(Snd.loops).filter(k => Snd.loops[k])
+    const urls = Object.fromEntries(slots.map(k => [k, Snd.loops[k].url]))
+    const gain = () => wl && wl.g ? +wl.g.gain.value.toFixed(3) : null
+    Object.assign(me, { grounded: true, vx: 12, vy: 0, vz: 0 }); sky.dbg.render ? sky.dbg.render(1) : sky.dbg.step(1); const ground = gain()
+    me.y += 30; Object.assign(me, { grounded: false, vx: 12, vy: 0, vz: 0 }); sky.dbg.render ? sky.dbg.render(1) : sky.dbg.step(0); const slow = gain()
+    Object.assign(me, { grounded: false, vx: 60, vy: 0, vz: 0 }); sky.dbg.render ? sky.dbg.render(1) : sky.dbg.step(0); const fast = gain()
+    me.y -= 30; Object.assign(me, { vx: 0 })
+    return { slots, urls, ground, slow, fast, hasWind: !!wl }
+  })
+  expect(r.slots.every(k => ['bgm', 'amb', 'wind'].includes(k)) && /wind_loop\.wav/.test(r.urls.wind || '') && /city_street_loop\.wav/.test(r.urls.amb || '') && !Object.values(r.urls).some(u => /air_01|loop_highway/.test(u)) && r.ground === 0 && r.slow === 0 && r.fast > 0 && r.fast <= 0.35, JSON.stringify(r)); return r
 })
 await t('矢印は方角だけ（2026-11-03 本人「高さを表現すると分かりづらい。方角だけでいい」）: 画面の上の真ん中に固定・目標が真上でも真下でも向きは水平の方角だけで決まる・正面0°/右90°/後ろ180°', async () => {
   const r = await p.evaluate(() => {

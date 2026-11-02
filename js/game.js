@@ -1,20 +1,36 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=4'
-import { createWorld } from '../shared/track.js?v=4'
-import { buildScene } from './scene.js?v=4'
-import { FX } from './fx.js?v=4'
-import { loadSky, setAniso } from './look.js?v=4'
-import { Q } from './quality.js?v=4'
-import { RunnerModel } from './runnermodel.js?v=4'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=4'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=4'
-import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=4'
-import { createBot, botInput } from '../shared/bot.js?v=4'
-import { drawCertificate } from './certificate.js?v=4'
+import { GAME } from '../shared/config.js?v=5'
+import { createWorld } from '../shared/track.js?v=5'
+import { buildScene } from './scene.js?v=5'
+import { FX } from './fx.js?v=5'
+import { loadSky, setAniso } from './look.js?v=5'
+import { Q } from './quality.js?v=5'
+import { RunnerModel } from './runnermodel.js?v=5'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=5'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=5'
+import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=5'
+import { createBot, botInput } from '../shared/bot.js?v=5'
+import { drawCertificate } from './certificate.js?v=5'
 
 const $ = id => document.getElementById(id)
+// ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
+const LM = THREE.DefaultLoadingManager, bootP = { done: 0, total: 0 }
+LM.onStart = LM.onProgress = (url, a, b) => { bootP.done = a; bootP.total = b; window.__bootSet && window.__bootSet(0.2 + 0.8 * (b ? a / b : 0)) }
+function bootWatch(onReady) {
+  const t0 = performance.now()
+  const tick = () => {
+    const done = bootP.total > 0 && bootP.done >= bootP.total && (charAssets.ready || charAssets.failed)
+    if (done || performance.now() - t0 > 40000) {   // 40 秒たっても終わらない時は遊べる所まで進める
+      window.__bootDone = true; window.__bootSet && window.__bootSet(1)
+      const b = $('boot'); b.classList.add('out'); setTimeout(() => b.classList.add('hidden'), 380)
+      onReady(); return
+    }
+    setTimeout(tick, 120)
+  }
+  tick()
+}
 const STEP = GAME.step
 const URL_ = 'https://tom3games.github.io/sky-catch/'
 const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } }
@@ -24,7 +40,7 @@ const T = {
   ja: {
     signTop: '頭上注意', logo: '空中キャッチ', signSub: '落ちてくる人を受けとめろ',
     radioName: '無線', radioLine: 'この街、ベランダから人がよく落ちる。地面に着く前に受けとめてくれ。',
-    start: '出動', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '出動準備中',
+    start: '出動', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '救護マットをふくらませ中',
     howTitle: '隊員手帳', ok: 'わかった',
     howItems: [
       'ビルを<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す',
@@ -52,7 +68,7 @@ const T = {
   en: {
     signTop: 'WATCH OUT ABOVE', logo: 'Sky Catch', signSub: 'Catch the people who fall',
     radioName: 'RADIO', radioLine: 'People keep falling off balconies in this town. Catch them before they hit the ground.',
-    start: 'Go', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Gearing up',
+    start: 'Go', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Inflating the rescue mats',
     howTitle: 'Field notes', ok: 'Got it',
     howItems: [
       '<b>Tap</b> a building or the big button to swing. Press again to let go',
@@ -313,7 +329,7 @@ function toTitle() {
   demo = { rd: r0, r: spawnRunner('demo', r0), b: createBot('skilled', 3) }
   clearVis(); placeMats(r0.mats); newModel()
   show('title'); $('touch').classList.add('hidden')
-  Snd.loop('bgm', 'snd/bgm_title.mp3', 0.22); Snd.loop('amb', 'snd/loop_highway.mp3', 0.12)
+  Snd.loop('bgm', 'snd/bgm_title.mp3', 0.22); Snd.loop('amb', 'snd/city_street_loop.wav', 0.2)
 }
 let hints = []
 function startRound(seed = Math.floor(Math.random() * 1e6)) {
@@ -323,7 +339,7 @@ function startRound(seed = Math.floor(Math.random() * 1e6)) {
   clearVis(); placeMats(rd.mats); newModel()
   cam.hd = 0; cam.pitch = 0.15; cam.userT = -1e9
   show(null); $('touch').classList.toggle('hidden', !touchMode)
-  Snd.loop('bgm', 'snd/bgm_play.mp3', 0.16); Snd.loop('amb', 'snd/loop_highway.mp3', 0.16); Snd.loop('wind', 'snd/air_01.mp3', 0.0001)
+  Snd.loop('bgm', 'snd/bgm_play.mp3', 0.16); Snd.loop('amb', 'snd/city_street_loop.wav', 0.26); Snd.loop('wind', 'snd/wind_loop.wav', 0.0001)
   say(`<small>${t('radioName')}</small>${t('radioLine')}`, 2.6)
   hints = [{ at: 3.2, k: touchMode ? 'hintWire' : 'hintWirePc', once: 'wire' }]
   shownClimb = false; shownMat = false
@@ -607,7 +623,7 @@ function render(dt) {
   aimMark.visible = false
   if (mode === 'play' && me && !me.rope && !touchMode && frameN % 4 === 0) aimMark.userData.p = findAnchor(world, me)
   if (mode === 'play' && me && !me.rope && !touchMode && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position) }
-  if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = Math.min(0.75, Math.max(0, (v3 - 6) / 32)) }
+  if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = me.grounded ? 0 : Math.min(0.35, Math.max(0, (v3 - 16) / 40)) }   // 風: 地面では鳴らさない・空中で 16m/s から（2026-11-03 本人「謎の水の音がずっと鳴ってる」）
   drawSpeed(mode === 'play' && me ? Math.hypot(me.vx, me.vy, me.vz) : 0, dt)
   if (mode !== 'play') dropRing.visible = false
   fx.update(dt)
@@ -650,4 +666,5 @@ window.sky = {
 applyLang()
 toTitle()
 requestAnimationFrame(frame)
-setTimeout(() => { $('boot').classList.add('hidden'); window.__catchReady = true }, 50)
+// ロード画面は読み込みが全部終わってから消す（テクスチャ・人物の GLB を three の読み込み数で数える）
+bootWatch(() => { window.__catchReady = true })

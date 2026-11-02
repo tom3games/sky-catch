@@ -1,8 +1,6 @@
 # 素材と出所（全部 CC0）
 
 ## 音
-- snd/loop_highway.mp3: 100 CC0 SFX #2 / rubberduck / CC0
-- snd/air_01.mp3: 100 CC0 SFX #2 / rubberduck / CC0
 - snd/swish-1.mp3: Swishes Sound Pack / artisticdude / CC0
 - snd/swish-2.mp3: Swishes Sound Pack / artisticdude / CC0
 - snd/swish-3.mp3: Swishes Sound Pack / artisticdude / CC0
@@ -41,3 +39,5 @@
 - snd/plop.mp3: 100 CC0 SFX / rubberduck / CC0
 - snd/spring.mp3: 100 CC0 SFX / rubberduck / CC0
 - snd/applause.mp3（3.6秒に切り出し）: Applause in a large hall or church / eXpl0it3r / CC0
+- snd/wind_loop.wav: Howling wind / Tvabutzku1234 / CC0（Wikimedia Commons。14秒の継ぎ目なしループにした。空中で速い時の風）
+- snd/city_street_loop.wav: Sunday in the city street noise 1 / cori / Public domain（Wikimedia Commons。静かな通りの22.5秒ループ。街の環境音）
