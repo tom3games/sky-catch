@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=7'
-import { createWorld } from '../shared/track.js?v=7'
-import { buildScene } from './scene.js?v=7'
-import { FX } from './fx.js?v=7'
-import { loadSky, setAniso } from './look.js?v=7'
-import { Q } from './quality.js?v=7'
-import { RunnerModel } from './runnermodel.js?v=7'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=7'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=7'
-import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=7'
-import { createBot, botInput } from '../shared/bot.js?v=7'
-import { drawCertificate } from './certificate.js?v=7'
+import { GAME } from '../shared/config.js?v=8'
+import { createWorld } from '../shared/track.js?v=8'
+import { buildScene } from './scene.js?v=8'
+import { FX } from './fx.js?v=8'
+import { loadSky, setAniso } from './look.js?v=8'
+import { Q } from './quality.js?v=8'
+import { RunnerModel } from './runnermodel.js?v=8'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=8'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=8'
+import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=8'
+import { createBot, botInput } from '../shared/bot.js?v=8'
+import { drawCertificate } from './certificate.js?v=8'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
@@ -291,7 +291,27 @@ function aimAt(cx, cy) {
   ndc.set((cx - rc.left) / rc.width * 2 - 1, -((cy - rc.top) / rc.height) * 2 + 1)
   ray.setFromCamera(ndc, camera)
   const o = ray.ray.origin, d = ray.ray.direction
-  pendingWire = { at: me && me.rope ? null : rayHit(world, o.x, o.y, o.z, d.x, d.y, d.z, 400), sx: cx, sy: cy }
+  const b = me && me.rope ? null : rayHit(world, o.x, o.y, o.z, d.x, d.y, d.z, 400)
+  let at = b
+  // 地面ワイヤー: 空中にいて、画面の地面（道・屋上）をちゃんとタップした時だけ。建物にも当たる時は建物を優先（ずれたタップで地面に掛けない）
+  if (me && !me.rope && !me.grounded && !me.climbing) {
+    const g = groundRay(o, d, RUN.wireRange + 60)
+    const tb = b ? Math.hypot(b.x - o.x, b.y - o.y, b.z - o.z) : Infinity
+    if (g && !(tb < g.t + 6)) at = { x: g.x, y: g.y, z: g.z, ground: true }
+  }
+  pendingWire = { at, sx: cx, sy: cy }
+}
+// 画面の光線が最初に地面（道・橋・屋上）を下回る点。1m 刻みで進めて、最後の1m を二分して詰める
+function groundRay(o, d, maxT) {
+  const below = t => { const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t; return y <= floorAt(world, x, z, y).h }
+  for (let t = 1; t < maxT; t += 1) {
+    if (!below(t)) continue
+    let a = t - 1, b2 = t
+    for (let i = 0; i < 6; i++) { const m = (a + b2) / 2; if (below(m)) b2 = m; else a = m }
+    const x = o.x + d.x * b2, z = o.z + d.z * b2
+    return { x, y: floorAt(world, x, z, o.y + d.y * b2 + 0.5).h, z, t: b2 }
+  }
+  return null
 }
 const stick = { x: 0, y: 0, id: null }
 {
@@ -689,7 +709,7 @@ function render(dt) {
   aimMark.visible = false
   if (mode === 'play' && me && !me.rope && !touchMode && frameN % 4 === 0) aimMark.userData.p = findAnchor(world, me)
   if (mode === 'play' && me && !me.rope && !touchMode && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position) }
-  if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = me.grounded ? 0 : Math.min(0.35, Math.max(0, (v3 - 16) / 40)) }   // 風: 地面では鳴らさない・空中で 16m/s から（2026-11-03 本人「謎の水の音がずっと鳴ってる」）
+  if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) { const gv = me.grounded ? 0 : Math.min(0.35, Math.max(0, (v3 - 16) / 40)); wl.g.gain.value = Number.isFinite(gv) ? gv : 0 } }   // 風: 地面では鳴らさない・空中で 16m/s から（2026-11-03 本人「謎の水の音がずっと鳴ってる」）
   drawSpeed(mode === 'play' && me ? Math.hypot(me.vx, me.vy, me.vz) : 0, dt)
   if (mode !== 'play') dropRing.visible = false
   fx.update(dt)
