@@ -1,27 +1,29 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=5'
-import { createWorld } from '../shared/track.js?v=5'
-import { buildScene } from './scene.js?v=5'
-import { FX } from './fx.js?v=5'
-import { loadSky, setAniso } from './look.js?v=5'
-import { Q } from './quality.js?v=5'
-import { RunnerModel } from './runnermodel.js?v=5'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=5'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=5'
-import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=5'
-import { createBot, botInput } from '../shared/bot.js?v=5'
-import { drawCertificate } from './certificate.js?v=5'
+import { GAME } from '../shared/config.js?v=6'
+import { createWorld } from '../shared/track.js?v=6'
+import { buildScene } from './scene.js?v=6'
+import { FX } from './fx.js?v=6'
+import { loadSky, setAniso } from './look.js?v=6'
+import { Q } from './quality.js?v=6'
+import { RunnerModel } from './runnermodel.js?v=6'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=6'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=6'
+import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=6'
+import { createBot, botInput } from '../shared/bot.js?v=6'
+import { drawCertificate } from './certificate.js?v=6'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
 const LM = THREE.DefaultLoadingManager, bootP = { done: 0, total: 0 }
-LM.onStart = LM.onProgress = (url, a, b) => { bootP.done = a; bootP.total = b; window.__bootSet && window.__bootSet(0.2 + 0.8 * (b ? a / b : 0)) }
+LM.onStart = LM.onProgress = (url, a, b) => { bootP.done = a; bootP.total = b; bootP.at = performance.now(); window.__bootSet && window.__bootSet(0.2 + 0.8 * (b ? a / b : 0)) }
 function bootWatch(onReady) {
   const t0 = performance.now()
   const tick = () => {
-    const done = bootP.total > 0 && bootP.done >= bootP.total && (charAssets.ready || charAssets.failed)
+    // three は同じ画像を何体ぶんも読む時に数が合わなくなることがある（72% で止まった）。人物が読めて、1.5秒新しい読み込みが無ければ終わりとみなす
+    const quiet = performance.now() - (bootP.at || 0) > 1500
+    const done = bootP.total > 0 && (bootP.done >= bootP.total || quiet) && (charAssets.ready || charAssets.failed)
     if (done || performance.now() - t0 > 40000) {   // 40 秒たっても終わらない時は遊べる所まで進める
       window.__bootDone = true; window.__bootSet && window.__bootSet(1)
       const b = $('boot'); b.classList.add('out'); setTimeout(() => b.classList.add('hidden'), 380)
