@@ -3,22 +3,24 @@
 
 export const CATCH = {
   roundSec: 90,           // 1回の長さ
-  warn: 4.5,              // 屋上のふちでぐらつく時間（この間に向かう）
-  gap: [7.5, 5.2],        // 次の人が出るまでの秒数（はじめ → 終わりにかけて短く）
+  warn: 5.5,              // 屋上のふちでぐらつく時間（この間に向かう）
+  // 2026-11-02 本人「難しすぎる。みんな連続で落ちていくから間に合わへん」→ 落ちてくるのは一度に1人。前の人が片付いて（受けとめた・落ちた）から gap 秒あけて次
+  gap: [3, 2.2],          // 前の人が片付いてから次の人が出るまでの秒数（はじめ → 終わりにかけて短く）
   firstAt: 2.5,
+  maxActive: 1,           // 同時にぐらつく・落ちている人の上限
   fallG: 5,             // 落ちる加速（人より遅い。手足をばたつかせて空気を受けている設定）
   fallMax: 6.5,           // 落ちる速さの上限
-  catchR: 3.4,            // 横の距離
-  catchV: 4.5,            // 縦の差
-  assistR: 10, assistA: 16,   // 空中でこの距離に入ると、落ちてくる人へ少し引き寄せられる（手を伸ばす）
+  catchR: 4.6,            // 横の距離（3.4→4.6。2026-11-02 難しすぎる）
+  catchV: 6,              // 縦の差（4.5→6）
+  assistR: 14, assistA: 22,   // 空中でこの距離に入ると、落ちてくる人へ少し引き寄せられる（手を伸ばす）
            // この距離まで近づけば受けとめる（胸の高さどうし）
   catchAir: 1.9,          // 足元の地面からこれ以上高い所にいないと受けとめられない（地面で待ち構えるのは無し）
   carryMax: 3,            // 一度に抱えられる人数
   matR: 4.6,              // 救護マットのこの範囲に着地すれば引き渡し
   ptsSave: 100, ptsChain: 50, ptsSwing: 50,   // 1人ごと / 連続の上乗せ（1つ増えるごと）/ ワイヤー中に受けとめた
   chainMax: 6,
-  nearMin: 25, nearMax: 75,                  // 次の人は、自分から この範囲の建物に出る
-  hMin: 16, hMax: 44      // 落ちる人がいるベランダ・窓の高さ
+  nearMin: 25, nearMax: 80,                  // 次の人は、自分から この範囲の建物に出る（近くに高い建物が無ければ範囲を広げる）
+  hMin: 30, hMax: 62      // 落ちる人がいるベランダ・窓の高さ（16〜44 → 30〜62。2026-11-02 本人「もうちょっと高い場所から落ちてくれへんと余裕がない」）
 }
 
 // 落ちる理由（毎回ちがう一言）。全部うっかり。誰もけがをしない
@@ -66,7 +68,8 @@ export function makeMats(world) {
 // 次の人を置く建物を探す。自分から nearMin〜nearMax、道に面したふち
 function pickSpot(world, r, rnd, others) {
   const blds = world._catchBlds || (world._catchBlds = world.colliders.filter(o => o.kind === 'building' && o.y1 >= CATCH.hMin + 4))
-  for (let g = 0; g < 400; g++) {
+  for (let g = 0; g < 1200; g++) {
+    const far = g < 400 ? CATCH.nearMax : g < 800 ? CATCH.nearMax * 1.6 : CATCH.nearMax * 2.5   // 近くに高い建物が無い時は遠くまで探す
     const o = blds[Math.floor(rnd() * blds.length)]
     if (o.yaw) continue
     const side = Math.floor(rnd() * 4)
@@ -74,7 +77,7 @@ function pickSpot(world, r, rnd, others) {
     const along = (rnd() * 2 - 1) * 0.6
     const ex = o.cx + (nx ? nx * o.hw : along * o.hw), ez = o.cz + (nz ? nz * o.hl : along * o.hl)
     const d = Math.hypot(ex - r.x, ez - r.z)
-    if (d < CATCH.nearMin || d > CATCH.nearMax) continue
+    if (d < CATCH.nearMin || d > far) continue
     // 前が道（落ちる先が開けている）
     if (world.surfaceAt(ex + nx * 7, ez + nz * 7) !== 'road' || world.surfaceAt(ex + nx * 12, ez + nz * 12) !== 'road') continue
     if (world.colliders.some(b => b !== o && b.kind === 'building' && Math.abs(ex + nx * 6 - b.cx) < b.hw + 1 && Math.abs(ez + nz * 6 - b.cz) < b.hl + 1)) continue
@@ -110,6 +113,7 @@ function spawn(rd, world, r) {
 }
 
 const chest = r => r.y + 1.2
+const gapNow = rd => { const k = Math.min(1, rd.t / CATCH.roundSec); return CATCH.gap[0] + (CATCH.gap[1] - CATCH.gap[0]) * k }
 
 // 1ステップ
 export function stepCatch(rd, r, dt, world) {
@@ -117,9 +121,11 @@ export function stepCatch(rd, r, dt, world) {
   rd.t += dt
   if (rd.t >= CATCH.roundSec) { rd.over = true; rd.events.push({ t: 'timeUp' }); return }
   // 次の人
-  if (rd.t >= rd.next) {
-    const k = Math.min(1, rd.t / CATCH.roundSec)
-    if (spawn(rd, world, r) || rd.t > rd.next + 2) rd.next = rd.t + CATCH.gap[0] + (CATCH.gap[1] - CATCH.gap[0]) * k
+  const busy = rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall').length
+  if (busy >= CATCH.maxActive) rd.next = Math.max(rd.next, rd.t + gapNow(rd))   // 落ちている人がいる間は次を出さない。片付いてから gap 秒
+  else if (rd.t >= rd.next) {
+    if (spawn(rd, world, r)) rd.next = rd.t + gapNow(rd)
+    else rd.next = rd.t + 0.5
   }
   const air = !r.grounded && (r.y - (r.groundY || 0)) > CATCH.catchAir
   for (const f of rd.fallers) {

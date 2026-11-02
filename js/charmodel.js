@@ -7,6 +7,7 @@ import { GLTFLoader } from '../vendor/jsm/loaders/GLTFLoader.js'
 import { clone as skClone } from '../vendor/jsm/utils/SkeletonUtils.js'
 
 const BASE = 'assets/chars/'
+const ROLL_SEC = 0.55   // shared/runner.js の RUN.rollSec と同じ
 const A = { ready: false, failed: false, ranger: null, clips: {}, custs: [] }
 export const charAssets = A
 
@@ -137,8 +138,18 @@ export class CharRunnerModel {
     }
     if (s.stun > 0 && st === 'air') { this.phase += dt * 14; roll = Math.sin(this.phase) * 0.8; pitch = Math.cos(this.phase * 0.7) * 0.9 }
     const kk = 1 - Math.exp(-dt * 10)
-    this.tilt.rotation.x += (pitch - this.tilt.rotation.x) * kk
-    this.tilt.rotation.z += (roll - this.tilt.rotation.z) * kk
+    if (s.rollT > 0 && s.grounded) {
+      // ローリング: 腰を中心に前へ1回転（専用のアニメが無いので、身を縮めた形で枠ごと回す）
+      this.play('Jump_Idle', 0.06)
+      const ph = 1 - s.rollT / ROLL_SEC
+      this.tilt.rotation.x = ph * Math.PI * 2; this.tilt.rotation.z = 0
+      this.tilt.position.y = this.hipY * (1 - 0.45 * Math.sin(ph * Math.PI))
+      this.rolling = true
+    } else {
+      if (this.rolling) { this.rolling = false; this.tilt.rotation.x = 0; this.tilt.position.y = this.hipY }
+      this.tilt.rotation.x += (pitch - this.tilt.rotation.x) * kk
+      this.tilt.rotation.z += (roll - this.tilt.rotation.z) * kk
+    }
     this.mixer.update(dt)
     g.updateMatrixWorld(true)
     // ワイヤーの腕: 掛けた点へまっすぐ伸ばす

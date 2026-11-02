@@ -95,6 +95,11 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .tbtn[data-k=wire] svg{width:52px;height:52px}
 .tbtn[data-k=wire].aim{box-shadow:0 0 0 3px rgba(255,255,255,.85),0 0 18px rgba(217,119,42,.9)}
 .tbtn:active{transform:scale(.94)}
+/* ローリング: 地面にいる時だけ、ワイヤーボタンの左に出る */
+.tbtn[data-k=roll]{right:calc(max(16px,env(safe-area-inset-right)) + 116px);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 6px);width:78px;height:78px;flex-direction:column;gap:1px;background:rgba(40,120,200,.42);border:2px solid rgba(150,205,255,.95)}
+.tbtn[data-k=roll] svg{width:34px;height:34px}
+.tbtn[data-k=roll] span{font-size:11px;font-weight:800;letter-spacing:.02em;line-height:1}
+.tbtn[data-k=roll].hidden{display:none}
 
 /* ---------- 結果 ---------- */
 #result{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:max(10px,env(safe-area-inset-top)) 16px max(10px,env(safe-area-inset-bottom));background:rgba(10,14,24,.72)}
@@ -115,5 +120,6 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
   .result-actions .go.small{min-width:0;width:100%;font-size:18px}
   .watch{width:54px;height:54px;top:max(46px,calc(env(safe-area-inset-top) + 40px))}.watch b{top:18px;font-size:17px}
   .tbtn[data-k=wire]{width:88px;height:88px}
+  .tbtn[data-k=roll]{width:68px;height:68px;right:calc(max(16px,env(safe-area-inset-right)) + 100px)}
   .say{top:38%;font-size:17px}
 }

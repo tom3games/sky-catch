@@ -125,15 +125,36 @@ await t('ワイヤーボタン: 地面から押すと上へ掛かり、ワイヤ
   stepRunner(r, { wire: true }, dt, world); stepRunner(r, {}, dt, world)
   expect(hooked && ay > 4 && still && !r.rope && !r.grounded, { hooked, ay, still, rope: !!r.rope }); return { up: +ay.toFixed(1) }
 })
-await t('落ちてくる人: 90秒で10人以上。落ちる真下の地面で待ち構えても受けとめられない', () => {
+await t('落ちてくる人: 一度に1人だけ・前の人が片付いて2秒以上あけて次・高さ30m以上。真下の地面で待っても受けとめられない（2026-11-02 本人「連続で落ちていくから間に合わへん」「もっと高い所から」）', () => {
   const rd = createRound(world, 2)
   const r = createRunner({ id: 'a', spawn: { x: 0, y: 0, z: 814, yaw: 0 } })
-  let fell = 0
+  let fell = 0, maxBusy = 0, minGap = 99, lastEnd = null, minH = 999
   while (!rd.over) {
-    stepCatch(rd, r, dt, world); for (const e of rd.events) if (e.t === 'fall') fell++; rd.events.length = 0
+    stepCatch(rd, r, dt, world)
+    for (const e of rd.events) {
+      if (e.t === 'fall') fell++
+      if (e.t === 'miss' || e.t === 'catch') lastEnd = rd.t
+      if (e.t === 'spawn') { if (lastEnd != null) minGap = Math.min(minGap, rd.t - lastEnd); const f = rd.fallers.find(f => f.id === e.id); minH = Math.min(minH, f.top - f.ground) }
+    }
+    rd.events.length = 0
+    maxBusy = Math.max(maxBusy, rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall').length)
     const f = rd.fallers.find(f => f.state === 'fall'); if (f) Object.assign(r, { x: f.x, z: f.z, y: f.ground, grounded: true, groundY: f.ground })
   }
-  expect(rd.n >= 10 && fell >= 9 && !rd.caught, { n: rd.n, fell, caught: rd.caught }); return { spawned: rd.n }
+  expect(rd.n >= 6 && fell >= 5 && !rd.caught && maxBusy === 1 && minGap >= 2 && minH >= 25, { n: rd.n, fell, caught: rd.caught, maxBusy, minGap, minH })
+  return { spawned: rd.n, maxBusy, minGap: +minGap.toFixed(1), minH: +minH.toFixed(1) }
+})
+await t('ローリング: 地面で押すと向いた方へ素早く転がる（走るより速い）・空中では出ない・続けて連打しても間が空く', () => {
+  const r = createRunner({ id: 'a', spawn: { x: 0, y: 0, z: 814, yaw: 0 } })
+  const run = (inp, n) => { for (let i = 0; i < n; i++) stepRunner(r, inp, dt, world) }
+  run({}, 30); r.vx = r.vz = 0
+  const z0 = r.z; run({ throttle: 1 }, Math.round(RUN.rollSec / dt)); const walk = Math.abs(r.z - z0)
+  run({}, 60); r.vx = r.vz = 0
+  const z1 = r.z; run({ roll: true }, 1); run({}, Math.round(RUN.rollSec / dt) - 1); const rolled = Math.abs(r.z - z1)
+  run({}, 60)
+  r.y += 20; r.grounded = false; r.vy = 0; run({ roll: true }, 1); const airRoll = r.rollT > 0
+  run({}, 200)
+  r.rollT = 0; r.rollCdT = 0; run({ roll: true }, 1); run({}, 1); const t1 = r.rollT; run({ roll: true }, 1); const again = r.rollT > t1
+  expect(rolled > walk * 1.6 && !airRoll && !again, { walk: +walk.toFixed(1), rolled: +rolled.toFixed(1), airRoll, again }); return { walk: +walk.toFixed(1), rolled: +rolled.toFixed(1) }
 })
 await t('空中なら受けとめられ、救護マットに着地すると引き渡せる（点と連続が増える）', () => {
   const { r, rd } = onWall()
@@ -144,10 +165,10 @@ await t('空中なら受けとめられ、救護マットに着地すると引�
   for (let i = 0; i < 60; i++) { stepRunner(r, {}, dt, world); stepCatch(rd, r, dt, world) }
   expect(rd.saved === 1 && rd.score >= CATCH.ptsSave && rd.chain === 1, { saved: rd.saved, score: rd.score }); return { score: rd.score }
 })
-await t('bot: ワイヤーを使う人は走るだけより多く救い、何もしないと0人（12回ずつ）', () => {
+await t('bot: ワイヤーを使う人は走るだけ以上に救い、何もしないと0人（12回ずつ）', () => {
   const avg = k => { let s = 0, sv = 0; for (let i = 1; i <= 12; i++) { const g = play(k, i); s += g.score; sv += g.saved } return { score: Math.round(s / 12), saved: +(sv / 12).toFixed(1) } }
   const sk = avg('skilled'), cl = avg('clumsy'), wk = avg('walker'), id = avg('idle')
-  expect(sk.saved > wk.saved * 1.5 && cl.saved > wk.saved * 1.3 && id.saved === 0 && cl.saved >= 1.5, { sk, cl, wk, id })
+  expect(sk.saved >= wk.saved && cl.saved >= wk.saved && id.saved === 0 && cl.saved >= 2.5, { sk, cl, wk, id })   // 2026-11-02 易しくした（一度に1人・高く）ので、壁を登って受けとめる走るだけ bot も救える
   return { skilled: sk, clumsy: cl, walker: wk, idle: id }
 })
 await t('AI臭さチェック NG 0', () => {
@@ -220,7 +241,7 @@ await t('何もしない1回は最低の判定（0人・0点）', async () => {
   await p.click('#btnAgain'); await p.waitForTimeout(300)
   await p.evaluate(() => { sky.dbg.pause(true); sky.dbg.step(60 * 92); sky.dbg.pause(false) }); await p.waitForTimeout(2500)
   const r = await p.evaluate(() => ({ mode: sky.mode, score: window.__lastScore, saved: sky.rd.saved, missed: sky.rd.missed }))
-  expect(r.mode === 'result' && r.score === 0 && r.saved === 0 && r.missed >= 8, r); return r
+  expect(r.mode === 'result' && r.score === 0 && r.saved === 0 && r.missed >= 5, r); return r
 })
 await t('音: 鳴らした回数が数えられ、テスト中は実際に無音', async () => {
   const r = await p.evaluate(() => ({ played: Object.keys(Snd.played).length, mute: window.__muteOk() }))
@@ -287,9 +308,23 @@ await t('WebKit: 跳ぶボタンが無い・右下の大きいワイヤーボタ
   const b = await wp.evaluate(() => !!sky.me.rope)
   expect(a && !b, { hooked: a, after: b }); return true
 })
+await t('WebKit: ローリングのボタンは地面にいる時だけ出て、押すと転がる（ワイヤー中・空中では消える）', async () => {
+  await wp.evaluate(() => { sky.me.rope = null; sky.me.climbing = null; sky.me.y = sky.me.groundY || 0; sky.me.vy = 0; sky.me.grounded = true }); await wp.waitForTimeout(400)
+  const onGround = await wp.evaluate(() => !document.querySelector('.tbtn[data-k=roll]').classList.contains('hidden'))
+  await wp.tap('.tbtn[data-k=roll]'); await wp.waitForTimeout(120)
+  const rolling = await wp.evaluate(() => ({ t: sky.me.rollT, v: Math.hypot(sky.me.vx, sky.me.vz) }))
+  await wp.waitForTimeout(800)
+  await wp.evaluate(() => { sky.me.y += 15; sky.me.grounded = false; sky.me.vy = 4 }); await wp.waitForTimeout(120)
+  const inAir = await wp.evaluate(() => !document.querySelector('.tbtn[data-k=roll]').classList.contains('hidden'))
+  expect(onGround && rolling.v > 10 && !inAir, { onGround, rolling, inAir }); return { speed: +rolling.v.toFixed(1) }
+})
 await t('WebKit: エラーなし', async () => { expect(wp.errs.length === 0, wp.errs.join('|')) })
 await wb.close()
 server.kill()
+await t('向き: カメラを0〜720°以上回しても、地上・空中・ワイヤー中でスティックの上下左右＝画面の上下左右（84通り。2026-11-02 しっぽ取りで見つかった不具合）', () => {
+  const out = execFileSync(process.execPath, ['_dir.mjs'], { cwd: ROOT, encoding: 'utf8', timeout: 600000 })
+  const j = JSON.parse(out.trim().split('\n').pop()); expect(j.ng === 0 && !j.errs.length, out.slice(-400)); return { cases: j.total }
+})
 console.log(results.join('\n'))
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

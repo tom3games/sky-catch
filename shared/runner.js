@@ -13,7 +13,7 @@
 // 座標は車と同じ（x=東西, z=南北, yaw=0 で +z を向く）。y は足の高さ。
 // 体力は dmg.body（車と同じ名前にして、警察と犯人の判定 chase.js をそのまま使う）
 
-import { GAME } from './config.js'
+import { GAME } from './config.js?v=3'
 
 export const RUN = {
   radius: 0.42, height: 1.75,
@@ -60,7 +60,9 @@ export const RUN = {
   pitMash: 0.15,                // ジャンプ連打1回で縮む秒数（ワイヤーを掛ければすぐ出られる）
   pitDepth: 2.2,
   crawlUp: 11, crawlDown: 7, crawlSide: 5,   // 壁に張り付いている間の上下左右の速さ（空中出前と同じ）
-  wallKick: 6                   // 張り付き中に跳ぶと壁から離れる速さ
+  wallKick: 6,                  // 張り付き中に跳ぶと壁から離れる速さ
+  // ローリング（地上のダッシュ代わり。2026-11-02 本人「地面でローリングってボタンが出るように。ダッシュの代わり」）
+  rollSpeed: 17, rollSec: 0.55, rollCd: 0.3
 }
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v
@@ -75,7 +77,7 @@ export function createRunner({ id, name = '', spawn, paint = null, bot = false }
     boost: 0, boostLock: false, boosting: false, heat: 0, overheat: false, zipCd: 0, zipping: false, zipPrev: false,
     dmg: { body: 1, engine: 1, tires: 1, susp: 1, cool: 1 },
     dents: [], flat: false,
-    wreck: 0, freeze: 0, stun: 0, falling: false, knock: false,
+    wreck: 0, freeze: 0, stun: 0, falling: false, knock: false, rollT: 0, rollCdT: 0, rollDir: null,
     respawnPoint: { x: spawn.x, y: spawn.y || 0, z: spawn.z, yaw: spawn.yaw || 0 },
     safeHist: [], safeT: 0,
     rope: null, wirePrev: false, jumpPrev: false, combo: 0, swings: 0,
@@ -281,6 +283,11 @@ export function stepRunner(r, inp, dt, world) {
   const jumpHeld = !!inp.jump, wireHeld = !!inp.wire
   const jumpPress = jumpHeld && !r.jumpPrev, wirePress = wireHeld && !r.wirePrev
   r.jumpPrev = jumpHeld; r.wirePrev = wireHeld
+  const rollHeld = !!inp.roll, rollPress = rollHeld && !r.rollPrev
+  r.rollPrev = rollHeld
+  if (r.rollT > 0) r.rollT = Math.max(0, r.rollT - dt)
+  if (r.rollCdT > 0) r.rollCdT = Math.max(0, r.rollCdT - dt)
+  if (!r.grounded || r.climbing) r.rollT = 0   // 跳んだ・ワイヤー・壁に張り付いたら転がるのは終わり
   if (r.stun > 0) { r.stun -= dt; thr = brk = steer = 0 }
   // 巻き取り: 押している間（スマホはスティックをワイヤーの方へ倒している間）ずっと
   const zipHeld = false, zipPress = false   // 巻取ボタンは無い（本人 2026-11-02「巻き取りって言うボタンいらん」）
@@ -289,10 +296,22 @@ export function stepRunner(r, inp, dt, world) {
   if (zipHeld && r.rope && r.stun <= 0) { if (!r.zipping) ev.push({ t: 'zip' }); r.zipping = true }
   else { r.zipping = false; if (zipPress && !r.rope && r.stun <= 0) ev.push({ t: 'zipNo' }) }
 
+  // スティック（画面基準の向き moveDir）: 倒した向きへすぐ向き直る。地上も空中も「画面の左＝左」になる
+  // 2026-11-02 本人（空中しっぽ取り）「カメラが1周回ったら左に抜けてるはずなのに右に動く」。前は向きを毎秒1.8〜3.4radでしか変えず、空中の力は今向いている方へだけ足していた
+  const md = r.stun > 0 || r.climbing ? null : inp.moveDir
+  if (md) {
+    const wantYaw = Math.atan2(md.x, md.z)
+    let d = wantYaw - r.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2
+    const rate = (r.grounded ? RUN.turn : RUN.airTurn) * 4 * dt
+    r.yaw += Math.max(-rate, Math.min(rate, d))
+    if (r.grounded) thr *= Math.max(0.15, Math.cos(Math.min(Math.abs(d), Math.PI / 2)))   // 真後ろへ倒した時は向き直るまで走らない
+    steer = 0
+  }
   // 向き
   const turn = r.climbing ? 0 : (r.grounded ? RUN.turn : r.rope ? RUN.airTurn * 1.2 : RUN.airTurn) * steer
   r.yaw -= turn * dt
   const fx = Math.sin(r.yaw), fz = Math.cos(r.yaw)
+  const ax = md ? md.x : fx, az = md ? md.z : fz   // 空中で力を足す向き: スティックがあれば倒した向き
 
   // ワイヤー: 押すたびに 掛ける / 外す
   if (wirePress && r.stun <= 0) {
@@ -316,7 +335,7 @@ export function stepRunner(r, inp, dt, world) {
         if (d <= RUN.wireRange && w.y > r.y + 2) a = { x: w.x, y: w.y, z: w.z, len: d }
         else { a = findAnchor(world, r, Math.atan2(w.x - r.x, w.z - r.z)); if (!a) { ev.push({ t: 'wireMiss', far: true, x: w.x, y: w.y, z: w.z, d }); a = false } }   // 遠すぎる所を押したら、その向きで届く所を探す（空中出前と同じ）
       }
-      if (a === null) a = findAnchor(world, r)
+      if (a === null) a = findAnchor(world, r, inp.wireYaw)   // 狙いが無い時は画面の前かスティックの向き
       if (a) {
         const d = Math.hypot(a.x - r.x, a.y - (r.y + 1.2), a.z - r.z)
         // 長さは「振り子の一番下が、足元の地面から swingLow 上に来る」長さ。今の距離より長ければ、張るまで落ちてから振れる
@@ -377,6 +396,16 @@ export function stepRunner(r, inp, dt, world) {
       }
       }
     }
+  } else if (r.grounded && (r.rollT > 0 || (rollPress && r.rollCdT <= 0 && r.stun <= 0 && !r.rope))) {
+    // ローリング: 押した瞬間にスティックの向き（無ければ向いている方）へ転がる。転がっている間は速さを保つ
+    if (r.rollT <= 0) {
+      const d = inp.moveDir || { x: fx, z: fz }
+      r.rollDir = d; r.rollT = RUN.rollSec; r.rollCdT = RUN.rollSec + RUN.rollCd
+      r.yaw = Math.atan2(d.x, d.z)
+      ev.push({ t: 'roll' })
+    }
+    const k = 0.75 + 0.25 * (r.rollT / RUN.rollSec)   // 終わりにかけて少し落とす
+    r.vx = r.rollDir.x * RUN.rollSpeed * k; r.vz = r.rollDir.z * RUN.rollSpeed * k
   } else if (r.grounded) {
     const want = (thr > 0 ? (r.sneaking ? RUN.sneak : RUN.walk) * thr : brk > 0 ? -RUN.back * (r.sneaking ? 0.5 : 1) : 0) * (r.speedMul || 1)
     const vf = r.vx * fx + r.vz * fz
@@ -386,16 +415,16 @@ export function stepRunner(r, inp, dt, world) {
     r.vx = fx * nf + fz * nl; r.vz = fz * nf - fx * nl
   } else {
     // 空中: 少しだけ前後に動ける
-    if (thr > 0) { r.vx += fx * RUN.airAccel * thr * dt; r.vz += fz * RUN.airAccel * thr * dt }
+    if (thr > 0) { r.vx += ax * RUN.airAccel * thr * dt; r.vz += az * RUN.airAccel * thr * dt }
     if (brk > 0) { r.vx *= 1 - 0.8 * dt; r.vz *= 1 - 0.8 * dt }
     if (r.rope) {
       // こぐ: 進む向きへ力を足す（振り子が大きくなる）
-      if (thr > 0 && r.vy < 2) { r.vx += fx * RUN.pump * dt; r.vz += fz * RUN.pump * dt }
+      if (thr > 0 && r.vy < 2) { r.vx += ax * RUN.pump * dt; r.vz += az * RUN.pump * dt }
       // 横へ流れる分を、向いている方へ寄せる（横の建物に掛けても前へ進む）
       const hv = Math.hypot(r.vx, r.vz)
       if (hv > 3) {
         const k = Math.min(1, RUN.steerAssist * dt)
-        const nx = r.vx / hv * (1 - k) + fx * k, nz = r.vz / hv * (1 - k) + fz * k, nl = Math.hypot(nx, nz) || 1
+        const nx = r.vx / hv * (1 - k) + ax * k, nz = r.vz / hv * (1 - k) + az * k, nl = Math.hypot(nx, nz) || 1
         r.vx = nx / nl * hv; r.vz = nz / nl * hv
       }
     }

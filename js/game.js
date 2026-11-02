@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js'
-import { createWorld } from '../shared/track.js'
-import { buildScene } from './scene.js'
-import { FX } from './fx.js'
-import { loadSky, setAniso } from './look.js'
-import { Q } from './quality.js'
-import { RunnerModel } from './runnermodel.js'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js'
-import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js'
-import { createBot, botInput } from '../shared/bot.js'
-import { drawCertificate } from './certificate.js'
+import { GAME } from '../shared/config.js?v=3'
+import { createWorld } from '../shared/track.js?v=3'
+import { buildScene } from './scene.js?v=3'
+import { FX } from './fx.js?v=3'
+import { loadSky, setAniso } from './look.js?v=3'
+import { Q } from './quality.js?v=3'
+import { RunnerModel } from './runnermodel.js?v=3'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=3'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=3'
+import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=3'
+import { createBot, botInput } from '../shared/bot.js?v=3'
+import { drawCertificate } from './certificate.js?v=3'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -30,13 +30,14 @@ const T = {
       'ビルを<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す',
       'ぐらついている人のそばへ。落ちてきたら<b>空中で</b>受けとめる',
       '壁に張り付いたら<b>上下左右に這える</b>。大きいボタンで壁から離れる',
+      '地面では<b>ローリング</b>で素早く転がって移動できる',
       '抱えた人は青い<b>救護マット</b>に着地して引き渡す。続けて救うほど点が増える'
     ],
-    keysPc: 'PC: WASD・矢印で移動　クリックでワイヤー（E でも可）　Space でも離れる　ドラッグで見回す',
+    keysPc: 'PC: WASD・矢印で移動　クリックでワイヤー（E でも可）　Shift でローリング　Space でも離れる　ドラッグで見回す',
     credit: '音: Kenney, rubberduck, artisticdude, poinl, Almitory, eXpl0it3r ほか（CC0）／人物: KayKit, Kenney（CC0）。詳しくは CREDITS.md',
     saved: '救助', carry: n => n ? `抱え${n}` : '', chain: n => `${n}連続`,
     pause: '休憩', paused: '休憩中', resume: '戻る', quit: 'やめる',
-    jump: '跳ぶ', tooFar: '届かない',
+    jump: '跳ぶ', roll: 'ローリング', tooFar: '届かない',
     hintWire: 'ビルをタッチかボタンでワイヤー', hintWirePc: 'ビルをクリック（か E）でワイヤー',
     hintClimb: '壁ではスティックで這う。大きいボタンで離れる', hintMat: '青い救護マットに着地して引き渡そう',
     warnTag: s => `あと${s}秒`, falling: 'わーっ！', full: 'もう抱えられない！',
@@ -57,13 +58,14 @@ const T = {
       '<b>Tap</b> a building or the big button to swing. Press again to let go',
       'Get close to anyone wobbling. When they fall, catch them <b>in the air</b>',
       'On a wall you can <b>crawl in any direction</b>. The big button lets go of the wall',
+      'On the ground, <b>roll</b> to get somewhere fast',
       'Land on a blue <b>rescue mat</b> to hand them over. Streaks score more'
     ],
-    keysPc: 'PC: WASD / arrows move · click to wire (or E) · Space also lets go · drag to look',
+    keysPc: 'PC: WASD / arrows move · click to wire (or E) · Shift to roll · Space also lets go · drag to look',
     credit: 'Sounds: Kenney, rubberduck, artisticdude, poinl, Almitory, eXpl0it3r and others (CC0) / Characters: KayKit, Kenney (CC0). See CREDITS.md',
     saved: 'SAVED', carry: n => n ? `holding ${n}` : '', chain: n => `${n} streak`,
     pause: 'Break', paused: 'On break', resume: 'Back', quit: 'Quit',
-    jump: 'Jump', tooFar: 'Too far',
+    jump: 'Jump', roll: 'ROLL', tooFar: 'Too far',
     hintWire: 'Tap a building or the big button to wire', hintWirePc: 'Click a building (or E) to wire',
     hintClimb: 'Crawl with the stick. The big button lets go', hintMat: 'Land on a blue rescue mat to hand them over',
     warnTag: s => `${s}s`, falling: 'Waaah!', full: 'Hands full!',
@@ -93,7 +95,7 @@ Snd.def({
   wire: ['snd/swish-1.mp3', 'snd/swish-2.mp3', 'snd/swish-3.mp3'], hook: ['snd/metalClick.mp3', 'snd/metal_02.mp3'],
   land: ['snd/footstep_01.mp3', 'snd/footstep_02.mp3'], bonk: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'],
   grunt: ['snd/grunt_01.mp3', 'snd/grunt_02.mp3', 'snd/grunt_03.mp3', 'snd/grunt_04.mp3'],
-  alert: 'snd/bong.mp3', catch: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'], save: 'snd/confirm.mp3', applause: 'snd/applause.mp3',
+  roll: 'snd/swish-5.mp3', alert: 'snd/bong.mp3', catch: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'], save: 'snd/confirm.mp3', applause: 'snd/applause.mp3',
   thud: 'snd/drop.mp3', boing: 'snd/spring.mp3', pop: 'snd/plop.mp3', click: 'snd/click_001.mp3', tick: 'snd/tick_002.mp3', ding: 'snd/bell_ding1.mp3',
   win: 'snd/jingles_SAX01.mp3', meh: 'snd/jingles_SAX03.mp3', lose: 'snd/jingles_PIZZA07.mp3'
 })
@@ -209,7 +211,7 @@ loadCharAssets().then(() => { if (charAssets.ready && model && !(model instanceo
 
 // ---------------------------------------------------------------- 入力（WIRE ESCAPE と同じ）
 const keys = new Set()
-const press = { jump: false }
+const press = { jump: false, roll: false }
 let pendingWire = null
 addEventListener('keydown', e => {
   if (mode !== 'play') return
@@ -217,6 +219,7 @@ addEventListener('keydown', e => {
   keys.add(e.code)
   if (e.code === 'KeyE') pendingWire = { at: null, key: true }
   if (e.code === 'Space') { press.jump = true; e.preventDefault() }
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') press.roll = true   // ローリング
   if (e.code === 'Escape' || e.code === 'KeyP') setPause(!paused)
 })
 addEventListener('keyup', e => keys.delete(e.code))
@@ -268,32 +271,36 @@ const stick = { x: 0, y: 0, id: null }
   const end = e => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; knob.style.transform = ''; el.classList.remove('held'); el.style.left = el.style.top = '' }
   zone.addEventListener('pointerup', end); zone.addEventListener('pointercancel', end)
   // 大きいボタン: 前の上へ自動でワイヤー。ワイヤー中なら離す、壁に張り付き中なら壁から離れる（跳ぶボタンは無い。2026-11-02 本人「飛ぶってボタンいらん」）
-  for (const b of document.querySelectorAll('.tbtn')) b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); if (b.dataset.k === 'wire') pendingWire = { at: null, key: true } })
+  for (const b of document.querySelectorAll('.tbtn')) b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); if (b.dataset.k === 'wire') pendingWire = { at: null, key: true }; if (b.dataset.k === 'roll') press.roll = true })
 }
+function screenBasis() { const e = camera.matrixWorld.elements; let rx = e[0], rz = e[2], fx = -e[8], fz = -e[10]; const a = Math.hypot(rx, rz) || 1, b = Math.hypot(fx, fz) || 1; return { r: { x: rx / a, z: rz / a }, f: { x: fx / b, z: fz / b } } }
 function gather() {
   let thr = 0, brk = 0, steer = 0, cx = 0, cy = 0
   if (keys.has('KeyW') || keys.has('ArrowUp')) { thr = 1; cy = 1 }
   if (keys.has('KeyS') || keys.has('ArrowDown')) { brk = 1; cy = -1 }
   if (keys.has('KeyA') || keys.has('ArrowLeft')) { steer -= 1; cx -= 1 }
   if (keys.has('KeyD') || keys.has('ArrowRight')) { steer += 1; cx += 1 }
+  // 画面の右と前（カメラの実際の向きから取る。cam.hd の式に頼らない）
+  const SR = screenBasis().r, SF = screenBasis().f
+  let moveDir = null
   if (stick.id != null) {
     // 空中出前と同じ効き方: 倒した向き（カメラから見て）へ走る。少し倒すだけで全力
     const mag = Math.min(1, Math.hypot(stick.x, stick.y))
     if (mag > 0.15) {
-      const want = cam.hd + Math.atan2(-stick.x, -stick.y)
-      let d = want - me.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2
-      steer = Math.max(-1, Math.min(1, -d * 2.5)); thr = Math.max(thr, Math.min(1, mag * 1.3))
+      const dx = SR.x * stick.x - SF.x * stick.y, dz = SR.z * stick.x - SF.z * stick.y, l = Math.hypot(dx, dz) || 1
+      moveDir = { x: dx / l, z: dz / l }; steer = 0; thr = Math.max(thr, Math.min(1, mag * 1.3))
     }
     // 壁に張り付いている時: 上下で登り降り、左右は画面で見た左右に合わせて壁沿いに
     cy = Math.abs(stick.y) > 0.25 ? -stick.y : 0; cx = 0
     if (me.climbing && Math.abs(stick.x) > 0.25) {
-      const cl = me.climbing, sideSign = (-Math.cos(cam.hd)) * cl.nz + Math.sin(cam.hd) * -cl.nx >= 0 ? 1 : -1
+      const cl = me.climbing, sideSign = SR.x * cl.nz - SR.z * cl.nx >= 0 ? 1 : -1   // 壁沿いの正の向き (nz,-nx) と画面の右をそろえる
       cx = stick.x * sideSign
     }
   }
-  const inp = { throttle: thr, brake: brk, steer, jump: press.jump, wire: false, cx, cy }
+  const inp = { throttle: thr, brake: brk, steer, jump: press.jump, wire: false, cx, cy, moveDir, roll: press.roll }
+  inp.wireYaw = moveDir ? Math.atan2(moveDir.x, moveDir.z) : touchMode ? Math.atan2(SF.x, SF.z) : undefined   // ワイヤーボタンの自動狙い: スティックの向き、スマホでは画面の前
   if (pendingWire) { inp.wire = true; if (pendingWire.at) inp.wireAt = pendingWire.at; me._tap = pendingWire; pendingWire = null }
-  press.jump = false
+  press.jump = false; press.roll = false
   return inp
 }
 
@@ -390,6 +397,7 @@ function updateHud(dt) {
 const log = []
 function onRunnerEvent(e) {
   log.push({ src: 'r', t: e.t, at: rd ? +rd.t.toFixed(2) : 0 })
+  if (e.t === 'roll') { sfx('roll', { vol: 0.6 }); sfx('land', { vol: 0.35, delay: 0.25 }) }
   if (e.t === 'wire') { sfx('wire', { vol: 0.7 }); sfx('hook', { vol: 0.5, delay: 0.06 }); hints = hints.filter(h => h.once !== 'wire') }
   else if (e.t === 'wireMiss') {
     sfx('wire', { vol: 0.4, rate: 1.3 })
@@ -527,11 +535,13 @@ function frame() {
 }
 // 1人目はおんぶ（後ろから見える）、2人目は肩車、3人目は前に抱っこ
 const CARRY = [{ p: [0, 0.82, -0.36], r: [0.3, 0, 0] }, { p: [0, 1.62, -0.08], r: [-0.1, 0, 0] }, { p: [0, 0.7, 0.36], r: [-0.2, Math.PI, 0] }]
+const rollBtn = document.querySelector('.tbtn[data-k=roll]')
 function render(dt) {
   const c = mode === 'title' ? demo && demo.r : me
   const round = mode === 'title' ? demo && demo.rd : rd
   if (c && model) {
     model.update(c, dt)
+    if (mode === 'play' && touchMode) rollBtn.classList.toggle('hidden', !(c.grounded && !c.climbing && !c.rope && c.stun <= 0 && !c.pit))   // ローリングは地面にいる時だけ出す
     if (c.rope) { const h = model.handWorld; ropeMesh.visible = true; ropeMesh.position.copy(h); ropeMesh.lookAt(c.rope.x, c.rope.y, c.rope.z); ropeMesh.scale.set(1, 1, Math.max(0.1, h.distanceTo(_v.set(c.rope.x, c.rope.y, c.rope.z)))) }
     else ropeMesh.visible = false
     updateCamera(dt, c)
@@ -595,7 +605,7 @@ function render(dt) {
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.sky = {
-  get mode() { return mode }, log, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode,
+  get mode() { return mode }, log, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
   start: seed => startRound(seed), toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
