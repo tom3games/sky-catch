@@ -1,7 +1,10 @@
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'
 // 公開URLの確認。node live.mjs（ログインしていないブラウザで見る）。SKIPGH=1 で GitHub ページの確認を省く
 import { chromium, webkit } from 'playwright'
+import { execSync } from 'node:child_process'
 const URL0 = 'https://tom3games.github.io/sky-catch/'
+// 個人のアカウント名は公開リポジトリに書かない。実行時に gh から取る
+const OWNER = (() => { try { return execSync('gh api user -q .login', { encoding: 'utf8' }).trim().toLowerCase() } catch { return '' } })()
 const out = []
 for (const [name, bt, opts] of [['chromium', chromium, {}], ['webkit', webkit, { isMobile: true, hasTouch: true, deviceScaleFactor: 2 }]]) {
   const b = await bt.launch(bt === chromium ? { ...MUTE_LAUNCH, args: [...MUTE_LAUNCH.args, '--use-angle=metal'] } : {}), ctx = await b.newContext({ locale: 'ja-JP', viewport: { width: 390, height: 844 }, ...opts })
@@ -40,7 +43,7 @@ if (process.env.SKIPGH) { console.log(out.join('\n')); process.exit(0) }
 const b = await chromium.launch(MUTE_LAUNCH), p = await b.newPage()
 for (const u of ['https://github.com/tom3games/sky-catch', 'https://github.com/tom3games/sky-catch/commits/main']) {
   const res = await p.goto(u, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(2500)
-  out.push(`${u} status=${res.status()} tmk4men=${/tmk4men/i.test(await p.content()) ? 'FOUND' : 'none'}`)
+  out.push(`${u} status=${res.status()} owner=${OWNER && (await p.content()).toLowerCase().includes(OWNER) ? 'FOUND' : 'none'}`)
 }
 await b.close()
 console.log(out.join('\n'))
