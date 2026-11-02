@@ -1,0 +1,43 @@
+# 素材と出所（全部 CC0）
+
+## 音
+- snd/loop_highway.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/air_01.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/swish-1.mp3: Swishes Sound Pack / artisticdude / CC0
+- snd/swish-2.mp3: Swishes Sound Pack / artisticdude / CC0
+- snd/swish-3.mp3: Swishes Sound Pack / artisticdude / CC0
+- snd/swish-5.mp3: Swishes Sound Pack / artisticdude / CC0
+- snd/metalClick.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/metal_02.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/loop_machine_03.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/footstep_01.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/footstep_02.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/bgm_play.mp3: Catch me if you can (OpenGameArt) / poinl / CC0
+- snd/bgm_title.mp3: Acoustic comedy (OpenGameArt) / Almitory / CC0 を選択
+- snd/thwack-01.mp3: Thwack Sounds / AntumDeluge / CC0
+- snd/thwack-03.mp3: Thwack Sounds / AntumDeluge / CC0
+- snd/splash_01.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/splash_02.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/dishes_01.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/dishes_02.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/dishes_03.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/bell_ding1.mp3: Bell dings/chimes / PWL / CC0
+- snd/coin_drop.mp3: Coin Drop / Vinrax / CC0
+- snd/grunt_*.mp3: Little Grunts / crueltyinc / CC0
+- snd/glass_breaking_01.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/bell_01.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/click_001.mp3: Interface Sounds / Kenney / CC0
+- snd/tick_002.mp3: Interface Sounds / Kenney / CC0
+- snd/jingles_SAX01.mp3: 85 Short music jingles / Kenney / CC0
+- snd/jingles_SAX03.mp3: 85 Short music jingles / Kenney / CC0
+- snd/jingles_PIZZA07.mp3: 85 Short music jingles / Kenney / CC0
+
+## 人物（3D）
+- assets/chars/Ranger.glb, Rig_Medium_*.glb: KayKit Adventurers 2.0 / Kay Lousberg / CC0（色は塗り替え）
+- assets/chars/character-*.glb, Textures/colormap.png: Kenney Mini Characters / Kenney / CC0
+- snd/bong.mp3: Interface Sounds / Kenney / CC0
+- snd/confirm.mp3: Interface Sounds / Kenney / CC0
+- snd/drop.mp3: Interface Sounds / Kenney / CC0
+- snd/plop.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/spring.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/applause.mp3（3.6秒に切り出し）: Applause in a large hall or church / eXpl0it3r / CC0

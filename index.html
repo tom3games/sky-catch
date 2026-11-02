@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>空中キャッチ | 落ちてくる人を受けとめろ</title>
+<meta name="description" content="ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめる3Dバカゲー。救護マットまで運んで90秒で何人助けられるか。スマホのブラウザで遊べる。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="空中キャッチ | 落ちてくる人を受けとめろ">
+<meta property="og:description" content="うっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめる。90秒で何人助けられるか。スマホのブラウザで遊べる。">
+<meta property="og:image" content="https://tom3games.github.io/sky-catch/og.png?v=1">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://tom3games.github.io/sky-catch/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f2c230">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&family=Klee+One:wght@600&family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=1">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body>
+<div id="view"></div>
+
+<!-- タイトル: 工事現場の「頭上注意」の看板 -->
+<section id="title" class="screen">
+  <div class="sign">
+    <div class="sign-in">
+      <p class="sign-top" data-t="signTop"></p>
+      <h1 class="logo" data-t="logo"></h1>
+      <p class="sign-sub" data-t="signSub"></p>
+    </div>
+  </div>
+  <p class="radio"><b data-t="radioName"></b><span data-t="radioLine"></span></p>
+  <div class="title-actions">
+    <button id="btnStart" class="go" data-t="start"></button>
+    <button id="btnHow" class="tlink strong" data-t="how"></button>
+  </div>
+  <nav class="foot">
+    <button id="btnLang" class="chip" data-t="lang"></button>
+    <button id="btnMute" class="chip"></button>
+    <a class="chip" href="https://tom3games.github.io/" data-t="more"></a>
+  </nav>
+</section>
+
+<!-- 遊び方: 隊員手帳のページ -->
+<section id="how" class="screen hidden">
+  <div class="notebook">
+    <h2 data-t="howTitle"></h2>
+    <ol id="howList"></ol>
+    <p class="keys" id="howKeys"></p>
+    <button class="go small" data-close data-t="ok"></button>
+    <p class="credit" data-t="credit"></p>
+  </div>
+</section>
+
+<!-- 遊び中 -->
+<section id="hud" class="hidden">
+  <div id="counter" class="counter" aria-label="救助した人数">
+    <div class="c-win"><span id="cNum">000</span></div>
+    <div class="c-lab"><span data-t="saved"></span><span id="cCarry"></span></div>
+  </div>
+  <div id="chain" class="chain hidden"></div>
+  <div id="watch" class="watch" aria-label="残り時間">
+    <svg viewBox="0 0 64 64"><rect x="28" y="1" width="8" height="6" rx="1.5" class="w-crown"/><circle cx="32" cy="35" r="25" class="w-face"/><path id="wArc" class="w-arc" d=""/></svg>
+    <b id="wNum">90</b>
+  </div>
+  <div id="bubbles"></div>
+  <div id="say" class="say hidden"></div>
+  <div id="arrow" class="edge-arrow hidden"><svg viewBox="0 0 24 24"><path d="M12 2 L21 20 L12 15 L3 20Z"/></svg><span id="arrowD"></span></div>
+  <div id="miss" class="miss hidden"><span>×</span><small data-t="tooFar"></small></div>
+  <button id="btnPause" class="corner-btn" data-t="pause"></button>
+  <div id="touch" class="touch hidden">
+    <div id="stick" class="stick"><div class="knob"></div></div>
+    <button class="tbtn" data-k="jump"><span data-t="jump"></span></button>
+  </div>
+</section>
+
+<!-- 一時停止 -->
+<section id="pause" class="screen hidden">
+  <div class="notebook narrow">
+    <h2 data-t="paused"></h2>
+    <button id="btnResume" class="go small" data-t="resume"></button>
+    <button id="btnQuit" class="tlink dark" data-t="quit"></button>
+  </div>
+</section>
+
+<!-- 結果: 感謝状 -->
+<section id="result" class="screen hidden">
+  <div class="cert-wrap"><canvas id="cert"></canvas></div>
+  <div class="result-actions">
+    <button id="btnAgain" class="go small" data-t="again"></button>
+    <div class="chips">
+      <button id="btnSave" class="chip" data-t="save"></button>
+      <a id="btnPost" class="chip" target="_blank" rel="noopener" data-t="post"></a>
+      <button id="btnTitle" class="chip" data-t="toTitle"></button>
+    </div>
+  </div>
+</section>
+
+<div id="boot" class="boot"><span data-t="loading">出動準備中</span></div>
+
+<script>
+// 拡大を止める（ピンチ・ダブルタップ・Ctrl+ホイール）。iOS は user-scalable=no を無視するので JS でも止める
+(function(){
+  var opt={passive:false};
+  ['gesturestart','gesturechange','gestureend'].forEach(function(n){document.addEventListener(n,function(e){e.preventDefault()},opt)});
+  document.addEventListener('touchmove',function(e){if(e.touches&&e.touches.length>1)e.preventDefault()},opt);
+  var last=0;document.addEventListener('touchend',function(e){var n=Date.now();if(n-last<300&&!(e.target.closest&&e.target.closest('button,a')))e.preventDefault();last=n},opt);
+  document.addEventListener('dblclick',function(e){e.preventDefault()},opt);
+  window.addEventListener('wheel',function(e){if(e.ctrlKey)e.preventDefault()},opt);
+  window.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['+','-','=','0',';'].indexOf(e.key)>=0)e.preventDefault()});
+})();
+// 起動失敗の保険
+(function(){
+  var errs=[];
+  window.addEventListener('error',function(e){errs.push((e.message||'error')+' @'+(e.filename||'')+':'+(e.lineno||''))});
+  window.addEventListener('unhandledrejection',function(e){errs.push('reject: '+(e.reason&&e.reason.message||e.reason))});
+  setTimeout(function(){
+    if(window.__catchReady) return;
+    var d=document.createElement('div');d.id='boot-err';
+    d.textContent='起動できませんでした / failed to start\n'+(errs.join('\n')||'(no error captured)')+'\n'+navigator.userAgent;
+    document.body.appendChild(d);
+  },9000);
+})();
+</script>
+<script src="sfx.js?v=1"></script>
+<script type="module" src="js/game.js?v=1"></script>
+</body>
+</html>

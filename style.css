@@ -1,0 +1,114 @@
+:root{
+  --ink:#16140f; --yel:#f2c230; --yel2:#e0aa12; --orange:#f07a1d; --orange2:#a9480c; --navy:#16213a;
+  --steel1:#e9ecee; --steel2:#a6adb3; --steel3:#6f777e; --amber:#ffb23a; --paper:#fbf6e9; --red:#c3271c;
+  --hand:'Klee One','Hiragino Maru Gothic ProN',sans-serif;
+  --brush:'Yuji Syuku','Hiragino Mincho ProN',serif;
+  --sans:'BIZ UDPGothic','Hiragino Sans','Yu Gothic',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden],.hidden{display:none!important}
+html,body{height:100%;overflow:hidden;background:#9fb4c8;color:var(--ink);font-family:var(--sans);touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touch-action:manipulation;text-decoration:none}
+#view{position:fixed;inset:0}
+#view canvas{display:block;width:100%;height:100%;touch-action:none}
+.screen{position:fixed;inset:0;z-index:10}
+#boot{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:var(--navy);color:#fff;font-size:18px;letter-spacing:.2em}
+#boot-err{position:fixed;inset:auto 8px 8px 8px;z-index:99;background:#fff;color:#b00;font:12px/1.4 monospace;white-space:pre-wrap;padding:10px;border-radius:6px}
+
+/* ---------- タイトル: 頭上注意の看板（虎柄のふち） ---------- */
+#title{display:flex;flex-direction:column;align-items:center;padding:max(14px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(10,14,24,.35) 0%,rgba(10,14,24,0) 40%,rgba(10,14,24,0) 60%,rgba(10,14,24,.55) 100%)}
+.sign{width:min(400px,92vw);padding:12px;background:repeating-linear-gradient(-45deg,var(--ink) 0 16px,var(--yel) 16px 32px);transform:rotate(-1.5deg);box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.sign-in{background:var(--yel);padding:14px 12px 12px;text-align:center}
+.sign-top{display:inline-block;font-weight:700;font-size:15px;letter-spacing:.3em;color:var(--yel);background:var(--ink);padding:3px 10px 3px 14px}
+.logo{font-weight:700;font-size:min(13.5vw,60px);line-height:1.05;letter-spacing:.02em;margin-top:8px;color:var(--ink)}
+.sign-sub{font-weight:700;font-size:15px;margin-top:6px;letter-spacing:.06em}
+.radio{margin-top:16px;max-width:24em;font-family:var(--hand);font-size:15px;line-height:1.5;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.7);text-align:center}
+.radio b{display:inline-block;margin-right:.6em;font-family:var(--sans);font-size:11px;padding:1px 6px;background:var(--orange);color:#fff;letter-spacing:.1em;text-shadow:none}
+.title-actions{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+/* 主役のボタン（押せる厚みはこれだけ）。救助服の橙 */
+.go{min-width:min(300px,80vw);padding:15px 28px 13px;font-weight:700;font-size:26px;letter-spacing:.3em;color:#fff;background:var(--orange);border-radius:8px;box-shadow:0 5px 0 var(--orange2),0 9px 18px rgba(0,0,0,.3);transition:transform .08s}
+.go:active{transform:translateY(4px);box-shadow:0 1px 0 var(--orange2),0 3px 8px rgba(0,0,0,.3)}
+.go.small{font-size:20px;min-width:190px;padding:11px 22px 9px;letter-spacing:.15em}
+.tlink{font-size:16px;color:#fff;padding:8px 10px;text-decoration:underline;text-underline-offset:5px;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.tlink.strong{font-weight:700}
+.tlink.dark{color:var(--ink);text-shadow:none;margin-top:6px}
+.foot{display:flex;gap:6px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 11px;font-size:13px;font-weight:700;color:#fff;background:rgba(14,18,28,.6);border-radius:17px;white-space:nowrap}
+.chip:active{transform:scale(.96)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+
+/* ---------- 隊員手帳 ---------- */
+#how,#pause{display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(10,14,24,.55)}
+.notebook{width:min(420px,100%);max-height:calc(100svh - 32px);overflow:hidden;background:var(--paper) repeating-linear-gradient(180deg,transparent 0 27px,#d9e2ee 27px 28px);padding:18px 20px 14px 34px;border-left:10px solid var(--navy);box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;align-items:center}
+.notebook.narrow{width:min(320px,100%)}
+.notebook h2{font-weight:700;font-size:22px;letter-spacing:.1em;margin-bottom:8px;align-self:flex-start}
+.notebook ol{list-style:none;font-family:var(--hand);font-size:16px;line-height:1.75;display:flex;flex-direction:column;gap:4px;width:100%}
+.notebook li{display:grid;grid-template-columns:20px 1fr;gap:6px}
+.notebook li::before{content:attr(data-n);font-weight:700;color:var(--orange);font-family:var(--sans)}
+.notebook b{color:var(--red);font-weight:600}
+.notebook .keys{font-size:12px;color:#4a5160;margin:8px 0 12px;line-height:1.5;align-self:flex-start}
+.notebook .keys:empty{margin:4px 0}
+.notebook .credit{font-size:10px;color:#6c7280;margin-top:10px;line-height:1.4;align-self:flex-start}
+
+/* ---------- 遊び中 ---------- */
+#hud{position:fixed;inset:0;z-index:5;pointer-events:none}
+/* 数取器（カウンター）: 救った人数 */
+.counter{position:absolute;left:max(10px,env(safe-area-inset-left));top:max(10px,env(safe-area-inset-top));width:118px;padding:9px 10px 7px;border-radius:22px 22px 14px 14px;background:linear-gradient(160deg,var(--steel1),var(--steel2) 60%,var(--steel3));box-shadow:inset 0 1px 0 #fff,0 3px 8px rgba(0,0,0,.35)}
+.c-win{background:#111;border-radius:4px;padding:2px 0;text-align:center;box-shadow:inset 0 2px 4px #000}
+.c-win span{font-family:'Courier New',monospace;font-weight:700;font-size:30px;letter-spacing:.12em;color:#f4f1e6;line-height:1.1}
+.c-lab{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#2b3036;margin-top:4px}
+.counter.bump{animation:bump .35s ease-out}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
+.chain{position:absolute;left:max(18px,calc(env(safe-area-inset-left) + 8px));top:max(84px,calc(env(safe-area-inset-top) + 76px));font-weight:700;font-size:15px;color:var(--red);border:2px solid var(--red);border-radius:4px;padding:1px 7px;background:rgba(255,255,255,.85);transform:rotate(-6deg)}
+/* ストップウォッチ: 残り時間 */
+.watch{position:absolute;right:max(10px,env(safe-area-inset-right));top:max(50px,calc(env(safe-area-inset-top) + 42px));width:64px;height:64px}
+.watch svg{width:100%;height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.w-face{fill:#fff;stroke:var(--steel3);stroke-width:4}
+.w-crown{fill:var(--steel2)}
+.w-arc{fill:var(--orange);opacity:.85}
+.watch b{position:absolute;left:0;right:0;top:22px;text-align:center;font-size:20px;color:var(--ink)}
+.watch.hurry b{color:var(--red)}
+/* 落ちそうな人の吹き出し（3Dの位置に出す） */
+.bub{position:absolute;left:0;top:0;transform:translate(-50%,-100%);width:max-content;max-width:min(240px,60vw);background:#fff;color:var(--ink);font-family:var(--hand);font-size:14px;line-height:1.35;padding:6px 10px 6px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.bub::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-7px;border:7px solid transparent;border-top-color:#fff;border-bottom:0}
+.bub i{display:block;font-style:normal;font-family:var(--sans);font-weight:700;font-size:12px;color:var(--red)}
+.bub.far{font-size:12px;max-width:180px}
+.say{position:absolute;left:50%;top:30%;transform:translateX(-50%);width:max-content;max-width:min(520px,calc(100% - 32px));font-family:var(--hand);font-size:20px;line-height:1.35;color:#fff;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.85),0 0 2px #000}
+.say small{display:block;font-family:var(--sans);font-weight:700;font-size:14px;color:var(--yel)}
+.edge-arrow{position:absolute;left:0;top:0;width:58px;height:58px;margin:-29px 0 0 -29px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.edge-arrow svg{width:30px;height:30px;fill:var(--orange);stroke:#fff;stroke-width:1.6}
+.edge-arrow span{font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;white-space:nowrap}
+.edge-arrow.mat svg{fill:#2a6fd6}
+.miss{position:absolute;left:0;top:0;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;color:#fff;text-shadow:0 1px 4px #000;animation:fadeUp .8s ease-out forwards}
+.miss span{font-size:40px;line-height:1;color:var(--red);-webkit-text-stroke:1.5px #fff}
+.miss small{font-size:13px;font-weight:700}
+@keyframes fadeUp{0%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%)}}
+.corner-btn{position:absolute;right:max(10px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));pointer-events:auto;font-size:13px;font-weight:700;color:#fff;background:rgba(14,18,28,.6);padding:6px 12px;border-radius:14px}
+/* スマホ操作（WIRE ESCAPE と同じ: 左スティック・画面タッチでワイヤー・右に跳ぶ） */
+.touch{position:absolute;inset:0;pointer-events:none}
+.stick{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));width:128px;height:128px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(14,18,28,.22);pointer-events:auto;touch-action:none}
+.stick .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(255,255,255,.85)}
+.tbtn{position:absolute;pointer-events:auto;right:max(22px,env(safe-area-inset-right));bottom:max(40px,calc(env(safe-area-inset-bottom) + 30px));width:76px;height:76px;border-radius:50%;background:rgba(14,18,28,.5);border:2px solid rgba(255,255,255,.65);color:#fff;font-weight:700;font-size:15px;touch-action:none;display:flex;align-items:center;justify-content:center}
+.tbtn:active{transform:scale(.94)}
+
+/* ---------- 結果 ---------- */
+#result{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:max(10px,env(safe-area-inset-top)) 16px max(10px,env(safe-area-inset-bottom));background:rgba(10,14,24,.72)}
+.cert-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;width:100%}
+#cert{max-width:100%;max-height:100%;width:auto;height:100%;aspect-ratio:1080/1350;object-fit:contain;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.result-actions{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;justify-content:center;color:#fff}
+@media (orientation:landscape) and (max-height:500px){
+  #title{flex-direction:row;flex-wrap:wrap;align-content:center;justify-content:center;gap:6px 24px}
+  .sign{width:min(330px,46vw);padding:9px}.logo{font-size:min(8vw,40px)}.sign-sub{font-size:13px}.sign-top{font-size:12px}
+  .radio{margin-top:0;max-width:18em;font-size:13px}
+  .title-actions{margin-top:0;width:auto}.go{padding:10px 22px 8px;font-size:22px;min-width:220px}
+  .foot{width:100%;justify-content:center;margin-top:2px}.chip{min-height:30px}
+  #result{flex-direction:row}.result-actions{flex-direction:column;width:190px}.chips{flex-direction:column;width:100%}.chips .chip{width:100%}
+  .notebook ol{font-size:13px;gap:0;line-height:1.6}.notebook h2{font-size:18px;margin-bottom:2px}.notebook{padding:10px 16px 8px 26px}
+  .stick{width:110px;height:110px}
+  #cert{height:calc(100svh - 20px);width:auto}
+  .cert-wrap{flex:0 1 auto}
+  .result-actions .go.small{min-width:0;width:100%;font-size:18px}
+  .watch{width:54px;height:54px;top:max(46px,calc(env(safe-area-inset-top) + 40px))}.watch b{top:18px;font-size:17px}
+  .tbtn{width:68px;height:68px;bottom:max(24px,env(safe-area-inset-bottom))}
+  .say{top:38%;font-size:17px}
+}
