@@ -38,7 +38,7 @@ export function botInput(b, r, rd, world, dt) {
   if (f && b.tgt !== f.id) { b.tgt = f.id; b.seen = 0 }
   b.seen += dt
   if (f && clumsy && b.seen < 1.0) f = null                     // 気づくのが遅い
-  if (!f && !rd.carry.length) { b.plan = null; if (r.climbing) { inp.jump = !b.prevJ; b.prevJ = inp.jump } return inp }
+  if (!f && !rd.carry.length) { b.plan = null; if (r.climbing) { inp.wire = !b.prevJ; b.prevJ = inp.wire } return inp }   // 跳ぶボタンは無い: ワイヤーボタンで壁から離れる
   let goal, wall = null
   if (f) {
     const ex = f.fx - f.nx * 1.3, ez = f.fz - f.nz * 1.3       // 落ちる位置の真下の壁
@@ -63,11 +63,11 @@ export function botInput(b, r, rd, world, dt) {
     inp.cy = (r.y + 1.2) < wantY - 0.6 ? 1 : (r.y + 1.2) > wantY + 2.5 && f.state === 'fall' ? -0.6 : 0
     if (clumsy) { inp.cx *= 0.6; if (b.rnd() < 0.3) inp.cy = 0 }
     // 落ちてくる人より上にいる: 手を離して落ちる（人より速く落ちるので追いつける）
-    if (f.state === 'fall' && (r.y + 1.2) > f.y + 2 && Math.abs(along) < 1.5) { inp.jump = !b.prevJ; b.prevJ = inp.jump; return inp }
+    if (f.state === 'fall' && (r.y + 1.2) > f.y + 2 && Math.abs(along) < 1.5) { inp.wire = !b.prevJ; b.prevJ = inp.wire; return inp }
     b.prevJ = false
     return inp
   }
-  if (r.climbing) { inp.jump = !b.prevJ; b.prevJ = inp.jump; return inp }   // 違う壁・用が済んだら離れる
+  if (r.climbing) { inp.wire = !b.prevJ; b.prevJ = inp.wire; return inp }   // 違う壁・用が済んだら離れる（ワイヤーボタン）
   b.prevJ = false
 
   let p = b.plan[b.idx]
@@ -103,7 +103,7 @@ export function botInput(b, r, rd, world, dt) {
     }
     // 近づいたら、振り子の低い所で外す（clumsy は外す時がばらつく）
     if (!r.rope) b.direct = false
-    if (r.rope && (!b.direct || !wall) && dGoal < (wall ? 22 : 16) && (clumsy ? b.rnd() < 0.05 : r.y < 7)) w = true
+    if (r.rope && (!b.direct || !wall) && dGoal < (wall ? 22 : 16) && (clumsy ? b.rnd() < 0.05 : r.y < 7 || (dGoal < 10 && r.vy < 0))) w = true   // 巻き取りが空中出前と同じ強さになり低い所まで下りにくいので、近くで下がり始めたら外す
   }
   inp.wire = w && !b.prevW; b.prevW = w
   if (inp.wire && !r.rope && b.aim) inp.wireAt = b.aim
@@ -111,6 +111,6 @@ export function botInput(b, r, rd, world, dt) {
   // 詰まったら跳ぶ
   b.stuck = Math.hypot(r.x - b.lx, r.z - b.lz) < 0.05 && !r.climbing ? b.stuck + dt : 0
   b.lx = r.x; b.lz = r.z
-  if (b.stuck > 1.2) { inp.jump = true; b.stuck = 0; b.replan = 0 }
+  if (b.stuck > 1.2) { if (b.kind === 'walker') inp.jump = true; else if (!r.rope) inp.wire = true; b.stuck = 0; b.replan = 0 }   // 詰まったらワイヤー（跳ぶボタンは無い）
   return inp
 }

@@ -57,12 +57,15 @@ const fit = q => q.evaluate(() => {
 // ---------------------------------------------------------------- 仕組み（node だけ）
 const world = createWorld('city')
 const dt = 1 / 60
-await t('ワイヤー: 届く距離は60〜85m。届かない所は外れて、自動で別の所にも掛からない', () => {
+await t('ワイヤー: 届く距離は60〜85m。遠すぎる所を押すと、その向きの届く所に掛かる（空中出前と同じ）', () => {
   expect(RUN.wireRange >= 60 && RUN.wireRange <= 85, RUN.wireRange)
   const r = createRunner({ id: 'a', spawn: { x: 0, y: 0, z: 700, yaw: 0 } })
   stepRunner(r, { wire: true, wireAt: { x: 40, y: 60, z: 790 } }, dt, world)
-  const miss = r.events.find(e => e.t === 'wireMiss')
-  expect(!r.rope && miss && miss.far, r.events); return { range: RUN.wireRange, d: Math.round(miss.d) }
+  expect(r.rope, r.events)
+  const d = Math.hypot(r.rope.x - r.x, r.rope.y - r.y, r.rope.z - r.z)
+  const dirOk = Math.abs(Math.atan2(r.rope.x, r.rope.z - 700) - Math.atan2(40, 90)) < 1.6
+  expect(d <= RUN.wireRange + 2 && dirOk, { d, rope: r.rope })
+  return { range: RUN.wireRange, d: Math.round(d) }
 })
 await t('ワイヤー: 届く所なら掛かる', () => {
   const r = createRunner({ id: 'a', spawn: { x: 0, y: 0, z: 700, yaw: 0 } })
@@ -101,10 +104,26 @@ await t('壁に張り付いたら上下左右に這える・何も押さなけ�
   expect(up > 3 && down > 3 && right > 2 && left > 2 && still < 0.05 && r.climbing, { up, down, right, left, still })
   return { up: +up.toFixed(1), down: +down.toFixed(1), right: +right.toFixed(1), left: +left.toFixed(1) }
 })
-await t('壁で跳ぶと離れる', () => {
+await t('壁でワイヤーボタン（狙いなし）を押すと離れる（跳ぶボタンは無い）', () => {
   const { r } = onWall()
-  stepRunner(r, { jump: true }, dt, world); stepRunner(r, {}, dt, world)
-  expect(!r.climbing && !r.grounded, { cl: !!r.climbing }); return true
+  stepRunner(r, { wire: true }, dt, world); stepRunner(r, {}, dt, world)
+  expect(!r.climbing && !r.grounded && !r.rope, { cl: !!r.climbing, rope: !!r.rope }); return true
+})
+await t('壁を下りきると壁から離れる', () => {
+  const { r } = onWall()
+  for (let i = 0; i < 240 && r.climbing; i++) stepRunner(r, { cy: -1 }, dt, world)
+  expect(!r.climbing, { y: r.y }); return { y: +r.y.toFixed(1) }
+})
+await t('ワイヤーボタン: 地面から押すと上へ掛かり、ワイヤー中にもう一回押すと離して飛ぶ', () => {
+  const rd = createRound(world, 4), m = rd.mats[0]
+  const r = createRunner({ id: 'a', spawn: { x: m.x, y: m.y, z: m.z - 6, yaw: 0 } })
+  for (let i = 0; i < 20; i++) stepRunner(r, {}, dt, world)
+  stepRunner(r, { wire: true }, dt, world)
+  const hooked = !!r.rope, ay = r.rope ? r.rope.y - r.y : 0
+  for (let i = 0; i < 50; i++) stepRunner(r, { throttle: 1 }, dt, world)
+  const still = !!r.rope
+  stepRunner(r, { wire: true }, dt, world); stepRunner(r, {}, dt, world)
+  expect(hooked && ay > 4 && still && !r.rope && !r.grounded, { hooked, ay, still, rope: !!r.rope }); return { up: +ay.toFixed(1) }
 })
 await t('落ちてくる人: 90秒で10人以上。落ちる真下の地面で待ち構えても受けとめられない', () => {
   const rd = createRound(world, 2)
@@ -247,17 +266,26 @@ await t('WebKit: タップで出動してスマホ操作が出る・実際には
   expect(r.mode === 'play' && r.touch && r.mute, r); return r
 })
 await t('WebKit: スティックで走る', async () => {
-  const box = await wp.locator('#stick').boundingBox()
+  const box = await wp.locator('#stickZone').boundingBox()
   const x0 = await wp.evaluate(() => [sky.me.x, sky.me.z])
   await wp.evaluate(({ x, y }) => {
-    const el = document.getElementById('stick')
+    const el = document.getElementById('stickZone')
     const ev = (type, cx, cy) => el.dispatchEvent(new PointerEvent(type, { pointerId: 7, clientX: cx, clientY: cy, bubbles: true, pointerType: 'touch' }))
     ev('pointerdown', x, y); ev('pointermove', x, y - 50)
-  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 })
+  }, { x: box.x + box.width * 0.4, y: box.y + box.height * 0.7 })
   await wp.waitForTimeout(1200)
   const x1 = await wp.evaluate(() => [sky.me.x, sky.me.z])
   const d = Math.hypot(x1[0] - x0[0], x1[1] - x0[1])
   expect(d > 3, d); return { moved: +d.toFixed(1) }
+})
+await t('WebKit: 跳ぶボタンが無い・右下の大きいワイヤーボタンで掛かって、もう一回で離れる', async () => {
+  const jump = await wp.$('.tbtn[data-k=jump]'), btn = await wp.$('.tbtn[data-k=wire]')
+  expect(!jump && btn, { jump: !!jump, wire: !!btn })
+  await wp.evaluate(() => { sky.me.rope = null }); await wp.tap('.tbtn[data-k=wire]'); await wp.waitForTimeout(300)
+  const a = await wp.evaluate(() => !!sky.me.rope)
+  await wp.tap('.tbtn[data-k=wire]'); await wp.waitForTimeout(300)
+  const b = await wp.evaluate(() => !!sky.me.rope)
+  expect(a && !b, { hooked: a, after: b }); return true
 })
 await t('WebKit: エラーなし', async () => { expect(wp.errs.length === 0, wp.errs.join('|')) })
 await wb.close()

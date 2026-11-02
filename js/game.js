@@ -27,18 +27,18 @@ const T = {
     start: '出動', how: '遊び方', lang: 'EN', more: 'ほかのゲーム', muteOn: '音 入', muteOff: '音 切', loading: '出動準備中',
     howTitle: '隊員手帳', ok: 'わかった',
     howItems: [
-      'ビルを<b>タッチ</b>するとワイヤーで飛べる',
+      'ビルを<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す',
       'ぐらついている人のそばへ。落ちてきたら<b>空中で</b>受けとめる',
-      '壁に張り付いたら<b>上下左右に這える</b>。上から手を離せば追いつける',
+      '壁に張り付いたら<b>上下左右に這える</b>。大きいボタンで壁から離れる',
       '抱えた人は青い<b>救護マット</b>に着地して引き渡す。続けて救うほど点が増える'
     ],
-    keysPc: 'PC: WASD・矢印で移動　クリックでワイヤー（E でも可）　Space ジャンプ・壁から離れる　ドラッグで見回す',
+    keysPc: 'PC: WASD・矢印で移動　クリックでワイヤー（E でも可）　Space でも離れる　ドラッグで見回す',
     credit: '音: Kenney, rubberduck, artisticdude, poinl, Almitory, eXpl0it3r ほか（CC0）／人物: KayKit, Kenney（CC0）。詳しくは CREDITS.md',
     saved: '救助', carry: n => n ? `抱え${n}` : '', chain: n => `${n}連続`,
     pause: '休憩', paused: '休憩中', resume: '戻る', quit: 'やめる',
     jump: '跳ぶ', tooFar: '届かない',
-    hintWire: 'ビルをタッチするとワイヤーが出る', hintWirePc: 'ビルをクリック（か E）でワイヤー',
-    hintClimb: '壁ではスティックで上下左右に這える', hintMat: '青い救護マットに着地して引き渡そう',
+    hintWire: 'ビルをタッチかボタンでワイヤー', hintWirePc: 'ビルをクリック（か E）でワイヤー',
+    hintClimb: '壁ではスティックで這う。大きいボタンで離れる', hintMat: '青い救護マットに着地して引き渡そう',
     warnTag: s => `あと${s}秒`, falling: 'わーっ！', full: 'もう抱えられない！',
     caught: (h, sw) => sw ? `スイングキャッチ！ 地上${h}m` : `キャッチ！ 地上${h}m`,
     saveMsg: (n, p) => `${n}人引き渡した +${p}点`, missTag: '受けとめそこねた',
@@ -54,18 +54,18 @@ const T = {
     start: 'Go', how: 'How to play', lang: 'JP', more: 'More games', muteOn: 'Sound on', muteOff: 'Muted', loading: 'Gearing up',
     howTitle: 'Field notes', ok: 'Got it',
     howItems: [
-      '<b>Tap</b> a building to swing on a wire',
+      '<b>Tap</b> a building or the big button to swing. Press again to let go',
       'Get close to anyone wobbling. When they fall, catch them <b>in the air</b>',
-      'On a wall you can <b>crawl in any direction</b>. Let go from above to catch up',
+      'On a wall you can <b>crawl in any direction</b>. The big button lets go of the wall',
       'Land on a blue <b>rescue mat</b> to hand them over. Streaks score more'
     ],
-    keysPc: 'PC: WASD / arrows move · click to wire (or E) · Space jump / let go of a wall · drag to look',
+    keysPc: 'PC: WASD / arrows move · click to wire (or E) · Space also lets go · drag to look',
     credit: 'Sounds: Kenney, rubberduck, artisticdude, poinl, Almitory, eXpl0it3r and others (CC0) / Characters: KayKit, Kenney (CC0). See CREDITS.md',
     saved: 'SAVED', carry: n => n ? `holding ${n}` : '', chain: n => `${n} streak`,
     pause: 'Break', paused: 'On break', resume: 'Back', quit: 'Quit',
     jump: 'Jump', tooFar: 'Too far',
-    hintWire: 'Tap a building to shoot a wire', hintWirePc: 'Click a building (or E) to wire',
-    hintClimb: 'On a wall, use the stick to crawl', hintMat: 'Land on a blue rescue mat to hand them over',
+    hintWire: 'Tap a building or the big button to wire', hintWirePc: 'Click a building (or E) to wire',
+    hintClimb: 'Crawl with the stick. The big button lets go', hintMat: 'Land on a blue rescue mat to hand them over',
     warnTag: s => `${s}s`, falling: 'Waaah!', full: 'Hands full!',
     caught: (h, sw) => sw ? `Swing catch! ${h}m up` : `Caught! ${h}m up`,
     saveMsg: (n, p) => `Handed over ${n} +${p}`, missTag: 'Missed',
@@ -249,18 +249,26 @@ function aimAt(cx, cy) {
 }
 const stick = { x: 0, y: 0, id: null }
 {
-  const el = $('stick'), knob = el.querySelector('.knob')
+  // 左の広い範囲のどこを触ってもスティックが出る（空中出前・WIRE ESCAPE と同じ）
+  const zone = $('stickZone'), el = $('stick'), knob = el.querySelector('.knob')
+  let ox = 0, oy = 0
+  const R = () => el.getBoundingClientRect().width / 2
   const upd = e => {
-    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2
-    let dx = (e.clientX - cx) / (r.width / 2), dy = (e.clientY - cy) / (r.height / 2)
+    let dx = (e.clientX - ox) / R(), dy = (e.clientY - oy) / R()
     const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l }
     stick.x = dx; stick.y = dy; knob.style.transform = `translate(${dx * 36}px,${dy * 36}px)`
   }
-  el.addEventListener('pointerdown', e => { Snd.init(); stick.id = e.pointerId; try { el.setPointerCapture(e.pointerId) } catch (er) {} upd(e) })
-  el.addEventListener('pointermove', e => { if (e.pointerId === stick.id) upd(e) })
-  const end = e => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; knob.style.transform = '' }
-  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end)
-  for (const b of document.querySelectorAll('.tbtn')) b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); press[b.dataset.k] = true })
+  zone.addEventListener('pointerdown', e => {
+    Snd.init(); if (stick.id != null) return
+    stick.id = e.pointerId; try { zone.setPointerCapture(e.pointerId) } catch (er) {}
+    const zr = zone.getBoundingClientRect(); ox = e.clientX; oy = e.clientY
+    el.style.left = (ox - zr.left) + 'px'; el.style.top = (oy - zr.top) + 'px'; el.classList.add('held'); upd(e)
+  })
+  zone.addEventListener('pointermove', e => { if (e.pointerId === stick.id) upd(e) })
+  const end = e => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; knob.style.transform = ''; el.classList.remove('held'); el.style.left = el.style.top = '' }
+  zone.addEventListener('pointerup', end); zone.addEventListener('pointercancel', end)
+  // 大きいボタン: 前の上へ自動でワイヤー。ワイヤー中なら離す、壁に張り付き中なら壁から離れる（跳ぶボタンは無い。2026-11-02 本人「飛ぶってボタンいらん」）
+  for (const b of document.querySelectorAll('.tbtn')) b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); if (b.dataset.k === 'wire') pendingWire = { at: null, key: true } })
 }
 function gather() {
   let thr = 0, brk = 0, steer = 0, cx = 0, cy = 0
@@ -269,12 +277,18 @@ function gather() {
   if (keys.has('KeyA') || keys.has('ArrowLeft')) { steer -= 1; cx -= 1 }
   if (keys.has('KeyD') || keys.has('ArrowRight')) { steer += 1; cx += 1 }
   if (stick.id != null) {
-    cx = stick.x; cy = -stick.y
+    // 空中出前と同じ効き方: 倒した向き（カメラから見て）へ走る。少し倒すだけで全力
     const mag = Math.min(1, Math.hypot(stick.x, stick.y))
-    if (mag > 0.2) {
+    if (mag > 0.15) {
       const want = cam.hd + Math.atan2(-stick.x, -stick.y)
       let d = want - me.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2
-      steer = Math.max(-1, Math.min(1, -d * 2.4)); thr = Math.abs(d) > 2.4 ? 0.3 : mag
+      steer = Math.max(-1, Math.min(1, -d * 2.5)); thr = Math.max(thr, Math.min(1, mag * 1.3))
+    }
+    // 壁に張り付いている時: 上下で登り降り、左右は画面で見た左右に合わせて壁沿いに
+    cy = Math.abs(stick.y) > 0.25 ? -stick.y : 0; cx = 0
+    if (me.climbing && Math.abs(stick.x) > 0.25) {
+      const cl = me.climbing, sideSign = (-Math.cos(cam.hd)) * cl.nz + Math.sin(cam.hd) * -cl.nx >= 0 ? 1 : -1
+      cx = stick.x * sideSign
     }
   }
   const inp = { throttle: thr, brake: brk, steer, jump: press.jump, wire: false, cx, cy }
@@ -447,7 +461,7 @@ function updateCamera(dt, c) {
   const v = Math.hypot(c.vx, c.vz)
   let hx = Math.sin(c.yaw), hz = Math.cos(c.yaw)
   if (v > 8) { const k = c.grounded ? 0.25 : 0.45; hx = hx * (1 - k) + (c.vx / v) * k; hz = hz * (1 - k) + (c.vz / v) * k; const l = Math.hypot(hx, hz); hx /= l; hz /= l }
-  const manual = performance.now() - cam.userT < 1800
+  const manual = touchMode || performance.now() - cam.userT < 1800   // スマホはカメラが勝手に追いかけない（空中出前と同じ）
   if (!manual) { cam.hd = lerpAngle(cam.hd, Math.atan2(hx, hz), 1 - Math.exp(-dt * (touchMode ? 2.2 : 5))); cam.pitch += ((c.climbing ? 0.45 : 0.15) - cam.pitch) * (1 - Math.exp(-dt * 1.5)) }
   hx = Math.sin(cam.hd); hz = Math.cos(cam.hd)
   let back = 5.2 + Math.min(2.4, v * 0.07), up = 2.1
@@ -586,7 +600,7 @@ window.sky = {
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
     teleport: (x, y, z, yaw) => { Object.assign(me, { x, y, z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, grounded: y < 0.1 }); if (yaw != null) me.yaw = yaw },
-    pressWire: (sx, sy) => aimAt(sx, sy), pressJump: () => { press.jump = true },
+    pressWire: (sx, sy) => aimAt(sx, sy), pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
     keys, stick, say, get model() { return model }, fallTime
   }
 }
