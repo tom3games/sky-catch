@@ -93,6 +93,15 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .edge-arrow svg{width:30px;height:30px;fill:var(--orange);stroke:#fff;stroke-width:1.6}
 .edge-arrow span{font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;white-space:nowrap}
 .edge-arrow.mat svg{fill:#2a6fd6}
+/* 高さの差と残り時間（方角の矢印の下）。人が画面の上の外なら「上を見て」（2026-11-03 本人「どっから落ちてきてんのか分からへん」） */
+.height-box{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 62px);transform:translateX(-50%);display:flex;align-items:center;gap:5px;padding:2px 9px;border-radius:10px;background:rgba(15,25,45,.62);color:#fff;font-size:12px;font-weight:700;line-height:1.35;white-space:nowrap}
+.height-box .chev{width:14px;height:11px;fill:none;stroke:var(--yel);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.height-box[data-dir=down] .chev{transform:rotate(180deg)}
+.height-box[data-dir=same] .chev{display:none}
+.height-box .h-sec{color:var(--yel)}
+.height-box .h-look:empty{display:none}
+.height-box.look-up .h-look{color:#16140f;background:var(--yel);border-radius:6px;padding:0 5px;animation:lookUp .8s ease-in-out infinite alternate}
+@keyframes lookUp{from{transform:translateY(0)}to{transform:translateY(-2px)}}
 .miss{position:absolute;left:0;top:0;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;color:#fff;text-shadow:0 1px 4px #000;animation:fadeUp .8s ease-out forwards}
 .miss span{font-size:40px;line-height:1;color:var(--red);-webkit-text-stroke:1.5px #fff}
 .miss small{font-size:13px;font-weight:700}

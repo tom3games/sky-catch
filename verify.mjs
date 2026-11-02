@@ -29,7 +29,7 @@ async function open(browser, opts = {}) {
   p.on('pageerror', e => p.errs.push('pageerror ' + e.message))
   p.on('console', m => { if (m.type() === 'error' && !/GL Driver|WebGL|GPU stall/.test(m.text())) p.errs.push('console ' + m.text()) })
   p.on('requestfailed', r => { if (!/fonts\.(googleapis|gstatic)/.test(r.url())) p.errs.push('reqfail ' + r.url()) })
-  await p.goto(URL0); await p.waitForFunction(() => window.__catchReady, null, { timeout: 20000 })
+  await p.goto(URL0); await p.waitForFunction(() => window.__catchReady, null, { timeout: 60000 })
   return p
 }
 const overflow = p => p.evaluate(() => {
@@ -184,6 +184,11 @@ await t('bot（24回ずつ）: 下手な人が救う割合は3〜5割（2026-11-
   expect((sk.score + cl.score) / 2 >= wk.score && id.saved === 0 && cl.rate >= 0.3 && cl.rate <= 0.5 && sk.rate < 0.47, { sk, cl, wk, id })   // 走るだけ bot も壁を登って受けとめる。地面で受けとめた分は点が少ない
   return { skilled: sk, clumsy: cl, walker: wk, idle: id }
 })
+await t('先読み（modulepreload）は importmap より後にある（前だと Chrome で "three" が解決できず起動しない。2026-11-03 WIRE ESCAPE で公開版が止まった）', async () => {
+  const h = (await import('node:fs')).readFileSync(ROOT + '/index.html', 'utf8')
+  const im = h.indexOf('type="importmap"'), mp = h.indexOf('rel="modulepreload"')
+  expect(im > 0 && (mp < 0 || mp > im), JSON.stringify({ im, mp })); return { im, mp }
+})
 await t('AI臭さチェック NG 0', () => {
   try { execFileSync(process.execPath, [ROOT + '/../_shared/ai_tells.mjs', ROOT], { encoding: 'utf8' }); return true }
   catch (e) { throw new Error((e.stdout || '').split('\n').filter(l => /NG/.test(l)).join(' / ')) }
@@ -264,6 +269,35 @@ await t('矢印は方角だけ（2026-11-03 本人「高さを表現すると分
     return { hi: +hi.toFixed(3), lo: +lo.toFixed(3), want: +want.toFixed(3), sameSpot: Math.abs(rcHi.left - rcLo.left) < 1 && Math.abs(rcHi.top - rcLo.top) < 1, cx: Math.round(rcHi.left + rcHi.width / 2 - innerWidth / 2), top: Math.round(rcHi.top), ahead: +ahead.toFixed(2), right: +(right * 180 / Math.PI).toFixed(0), back: +(Math.abs(back) * 180 / Math.PI).toFixed(0), hidden: ar.classList.contains('hidden') }
   })
   expect(!r.hidden && Math.abs(r.hi - r.lo) < 0.05 && Math.abs(r.hi - r.want) < 0.05 && r.sameSpot && Math.abs(r.cx) <= 2 && r.top < 80 && Math.abs(r.ahead) < 0.02 && Math.abs(r.right - 90) <= 1 && Math.abs(r.back - 180) <= 1, r); return r
+})
+await t('見上げ（2026-11-03 本人「もうちょっとカメラを上に上げられるように」）: 上へなぞると真上近く（約60度以上）まで見上げられ、カメラは地面にめり込まず、隊員は画面の中に残る', async () => {
+  const r = await p.evaluate(() => {
+    const me = sky.me, cam = sky.cam, c = sky.camera
+    const p0 = cam.pitch; cam.userT = performance.now() + 1e7
+    // 上へなぞる（指を上へ 400px）
+    const ev = (type, y) => new PointerEvent(type, { pointerId: 9, clientX: 200, clientY: y, bubbles: true })
+    document.querySelector('#view canvas').dispatchEvent(ev('pointerdown', 600)); for (let y = 590; y >= 0; y -= 10) window.dispatchEvent(ev('pointermove', y)); window.dispatchEvent(ev('pointerup', 0))
+    const pitch = cam.pitch
+    sky.dbg.step(1); for (let i = 0; i < 40; i++) sky.dbg.step(0)
+    c.updateMatrixWorld(); const e = c.matrixWorld.elements, fy = -e[9], ang = Math.asin(Math.max(-1, Math.min(1, fy))) * 180 / Math.PI
+    const gy = sky.world.groundAt(c.position.x, c.position.z, c.position.y).h
+    const v = c.position.clone().set(me.x, me.y + 1.6, me.z).project(c)   // 頭
+    cam.pitch = p0; cam.userT = -1e9; sky.dbg.step(1)
+    return { pitch: +pitch.toFixed(2), min: sky.PITCH_MIN, ang: Math.round(ang), camAbove: +(c.position.y - gy).toFixed(1), meOnScreen: Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1 }
+  })
+  expect(r.pitch <= -1.2 && r.ang >= 55 && r.camAbove >= 0.5 && r.meOnScreen, JSON.stringify(r)); return r
+})
+await t('落ちてくる人の目印（2026-11-03 本人「どっから落ちてきてんのか分からへん」）: ベランダの下に地面から屋上の上まで光の柱、頭の上に「！」の看板、矢印の下に「上に ○m」と残り秒、画面の上の外なら「上を見て」', async () => {
+  const r = await p.evaluate(() => {
+    const f = sky.rd.fallers.find(f => f.state === 'warn' || f.state === 'fall'), me = sky.me, cam = sky.cam
+    sky.dbg.teleport(f.fx + f.nx * 12, 0, f.fz + f.nz * 12, Math.atan2(-f.nx, -f.nz)); cam.hd = Math.atan2(-f.nx, -f.nz); cam.pitch = 0.15; cam.userT = performance.now() + 1e7
+    sky.dbg.step(1); for (let i = 0; i < 30; i++) sky.dbg.step(0)
+    const b = sky.beam, col = b.children[0], hb = document.getElementById('heightBox')
+    const out = { beamVis: b.visible, dx: +(b.position.x - f.fx).toFixed(2), dz: +(b.position.z - f.fz).toFixed(2), bottom: +(b.position.y - f.ground).toFixed(1), top: +(b.position.y + col.scale.y).toFixed(1), roof: +f.roof.toFixed(1), sign: sky.headSign.visible && sky.headSign.position.y > f.y + 2, dir: hb.dataset.dir, text: hb.textContent, look: hb.classList.contains('look-up') }
+    cam.userT = -1e9
+    return out
+  })
+  expect(r.beamVis && Math.abs(r.dx) < 0.01 && Math.abs(r.dz) < 0.01 && Math.abs(r.bottom) < 0.1 && r.top > r.roof + 5 && r.sign && r.dir === 'up' && /上に \d+m/.test(r.text) && /あと\d秒/.test(r.text) && r.look && /上を見て/.test(r.text), JSON.stringify(r)); return { text: r.text }
 })
 await t('画面タッチ: 近くのビルに掛かる', async () => {
   const r = await p.evaluate(() => {
