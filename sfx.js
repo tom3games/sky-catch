@@ -28,7 +28,7 @@ const Snd = {
   },
   ir(sec) { const c = this.ctx, n = Math.floor(c.sampleRate * sec), b = c.createBuffer(2, n, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3) } return b },
   async load() {
-    const urls = new Set(Object.values(this.files).flat().concat(Object.values(this.loops).map(l => l.url)))
+    const urls = new Set(Object.values(this.files).flat().concat(Object.values(this.loops).filter(Boolean).map(l => l.url)))
     await Promise.all([...urls].filter(u => u && !this.bufs[u]).map(async u => {
       this.bufs[u] = 'loading'
       try { const ab = await (await fetch(u)).arrayBuffer(); this.bufs[u] = await new Promise((ok, ng) => this.ctx.decodeAudioData(ab, ok, ng)) } catch (e) { delete this.bufs[u] }   // 古い Safari はコールバック形しか無い
