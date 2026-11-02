@@ -125,10 +125,10 @@ await t('ワイヤーボタン: 地面から押すと上へ掛かり、ワイヤ
   stepRunner(r, { wire: true }, dt, world); stepRunner(r, {}, dt, world)
   expect(hooked && ay > 4 && still && !r.rope && !r.grounded, { hooked, ay, still, rope: !!r.rope }); return { up: +ay.toFixed(1) }
 })
-await t('落ちてくる人: 一度に1人だけ・前の人が片付いて2秒以上あけて次・高さ30m以上。真下の地面で待っても受けとめられない（2026-11-02 本人「連続で落ちていくから間に合わへん」「もっと高い所から」）', () => {
+await t('落ちてくる人: 前半は一度に1人・後半はときどき2人まで（3人以上は無い）・片付いてから1.5秒以上あけて次・高さ30m以上（2026-11-02「連続で落ちて間に合わへん」「もっと高い所から」、2026-11-03「ちょっと簡単になりすぎ」）', () => {
   const rd = createRound(world, 2)
   const r = createRunner({ id: 'a', spawn: { x: 0, y: 0, z: 814, yaw: 0 } })
-  let fell = 0, maxBusy = 0, minGap = 99, lastEnd = null, minH = 999
+  let fell = 0, maxBusy = 0, maxEarly = 0, minGap = 99, lastEnd = null, minH = 999
   while (!rd.over) {
     stepCatch(rd, r, dt, world)
     for (const e of rd.events) {
@@ -137,11 +137,24 @@ await t('落ちてくる人: 一度に1人だけ・前の人が片付いて2秒�
       if (e.t === 'spawn') { if (lastEnd != null) minGap = Math.min(minGap, rd.t - lastEnd); const f = rd.fallers.find(f => f.id === e.id); minH = Math.min(minH, f.top - f.ground) }
     }
     rd.events.length = 0
-    maxBusy = Math.max(maxBusy, rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall').length)
-    const f = rd.fallers.find(f => f.state === 'fall'); if (f) Object.assign(r, { x: f.x, z: f.z, y: f.ground, grounded: true, groundY: f.ground })
+    const busy = rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall').length
+    if (rd.t < CATCH.pairAfter) maxEarly = Math.max(maxEarly, busy)
+    maxBusy = Math.max(maxBusy, busy)
   }
-  expect(rd.n >= 6 && fell >= 5 && !rd.caught && maxBusy === 1 && minGap >= 2 && minH >= 25, { n: rd.n, fell, caught: rd.caught, maxBusy, minGap, minH })
-  return { spawned: rd.n, maxBusy, minGap: +minGap.toFixed(1), minH: +minH.toFixed(1) }
+  expect(rd.n >= 6 && fell >= 5 && maxEarly === 1 && maxBusy <= 2 && minGap >= 1.5 && minH >= 25, { n: rd.n, fell, maxEarly, maxBusy, minGap, minH })
+  return { spawned: rd.n, maxEarly, maxBusy, minGap: +minGap.toFixed(1), minH: +minH.toFixed(1) }
+})
+await t('地面でも受けとめられる（2026-11-03 本人「地面でキャッチできない」）。ただし点は少なめ（60点）・連続に数えない', () => {
+  const rd = createRound(world, 2)
+  const r = createRunner({ id: 'g', spawn: { x: 0, y: 0, z: 814, yaw: 0 } })
+  let caughtGround = false
+  for (let i = 0; i < 60 * 40 && !rd.carry.length; i++) {
+    const f = rd.fallers.find(f => f.state === 'fall'); if (f) Object.assign(r, { x: f.x, z: f.z, y: f.ground, vx: 0, vy: 0, vz: 0, grounded: true, groundY: f.ground })
+    stepCatch(rd, r, dt, world); for (const e of rd.events) if (e.t === 'catch' && e.ground) caughtGround = true; rd.events.length = 0
+  }
+  const m = rd.mats[0]
+  Object.assign(r, { x: m.x, z: m.z, y: m.y, grounded: true }); stepCatch(rd, r, dt, world)
+  expect(caughtGround && rd.saved === 1 && rd.score === CATCH.ptsGround && rd.chain === 0 && CATCH.ptsGround < CATCH.ptsSave, { caughtGround, saved: rd.saved, score: rd.score, chain: rd.chain }); return { score: rd.score }
 })
 await t('ローリング: 地面で押すと向いた方へ素早く転がる（走るより速い）・空中では出ない・続けて連打しても間が空く', () => {
   const r = createRunner({ id: 'a', spawn: { x: 0, y: 0, z: 814, yaw: 0 } })
@@ -165,10 +178,10 @@ await t('空中なら受けとめられ、救護マットに着地すると引�
   for (let i = 0; i < 60; i++) { stepRunner(r, {}, dt, world); stepCatch(rd, r, dt, world) }
   expect(rd.saved === 1 && rd.score >= CATCH.ptsSave && rd.chain === 1, { saved: rd.saved, score: rd.score }); return { score: rd.score }
 })
-await t('bot: ワイヤーを使う人は走るだけ以上に救い、何もしないと0人（12回ずつ）', () => {
-  const avg = k => { let s = 0, sv = 0; for (let i = 1; i <= 12; i++) { const g = play(k, i); s += g.score; sv += g.saved } return { score: Math.round(s / 12), saved: +(sv / 12).toFixed(1) } }
+await t('bot（24回ずつ）: 下手な人が救う割合は3〜5割（2026-11-03「簡単になりすぎ」で 56% から4割前後に）・ワイヤーを使う人の点は走るだけ以上・何もしないと0人', () => {
+  const avg = k => { let s = 0, sv = 0, sp = 0; for (let i = 1; i <= 24; i++) { const g = play(k, i); s += g.score; sv += g.saved; sp += g.spawned } return { score: Math.round(s / 24), saved: +(sv / 24).toFixed(1), rate: +(sv / sp).toFixed(2) } }
   const sk = avg('skilled'), cl = avg('clumsy'), wk = avg('walker'), id = avg('idle')
-  expect(sk.saved >= wk.saved && cl.saved >= wk.saved && id.saved === 0 && cl.saved >= 2.5, { sk, cl, wk, id })   // 2026-11-02 易しくした（一度に1人・高く）ので、壁を登って受けとめる走るだけ bot も救える
+  expect((sk.score + cl.score) / 2 >= wk.score && id.saved === 0 && cl.rate >= 0.3 && cl.rate <= 0.5 && sk.rate < 0.47, { sk, cl, wk, id })   // 走るだけ bot も壁を登って受けとめる。地面で受けとめた分は点が少ない
   return { skilled: sk, clumsy: cl, walker: wk, idle: id }
 })
 await t('AI臭さチェック NG 0', () => {
@@ -199,6 +212,21 @@ await t('出動: 救助000・時計・巻取ボタン無し・最初の人がぐ
   const r = await p.evaluate(() => ({ n: document.getElementById('cNum').textContent, w: +document.getElementById('wNum').textContent, reel: !!document.querySelector('[data-k=reel]'), f: sky.rd.fallers.length, guide: !document.getElementById('arrow').classList.contains('hidden') || document.querySelectorAll('#bubbles .bub').length > 0 }))
   expect(r.n === '000' && r.w <= 90 && r.w >= 85 && !r.reel && r.f >= 1 && r.guide, r); return r
 })
+await t('矢印は方角だけ（2026-11-03 本人「高さを表現すると分かりづらい。方角だけでいい」）: 画面の上の真ん中に固定・目標が真上でも真下でも向きは水平の方角だけで決まる・正面0°/右90°/後ろ180°', async () => {
+  const r = await p.evaluate(() => {
+    const ar = document.getElementById('arrow'), svg = ar.querySelector('svg')
+    const ang = () => { const m = /rotate\(([-\d.e]+)rad\)/.exec(svg.style.transform); return m ? +m[1] : NaN }
+    const f = sky.rd.fallers.find(f => f.state === 'warn' || f.state === 'fall'); const y0 = f.y
+    f.y = y0 + 150; sky.dbg.step(1); const hi = ang(), rcHi = ar.getBoundingClientRect()
+    f.y = -50; sky.dbg.step(1); const lo = ang(), rcLo = ar.getBoundingClientRect()
+    f.y = y0; sky.dbg.step(1)
+    const want = sky.dbg.compass(f.x, f.z)
+    const me = sky.me, e = sky.camera.matrixWorld.elements, fx = -e[8], fz = -e[10], L = Math.hypot(fx, fz)
+    const ahead = sky.dbg.compass(me.x + fx / L * 30, me.z + fz / L * 30), right = sky.dbg.compass(me.x - fz / L * 30, me.z + fx / L * 30), back = sky.dbg.compass(me.x - fx / L * 30, me.z - fz / L * 30)
+    return { hi: +hi.toFixed(3), lo: +lo.toFixed(3), want: +want.toFixed(3), sameSpot: Math.abs(rcHi.left - rcLo.left) < 1 && Math.abs(rcHi.top - rcLo.top) < 1, cx: Math.round(rcHi.left + rcHi.width / 2 - innerWidth / 2), top: Math.round(rcHi.top), ahead: +ahead.toFixed(2), right: +(right * 180 / Math.PI).toFixed(0), back: +(Math.abs(back) * 180 / Math.PI).toFixed(0), hidden: ar.classList.contains('hidden') }
+  })
+  expect(!r.hidden && Math.abs(r.hi - r.lo) < 0.05 && Math.abs(r.hi - r.want) < 0.05 && r.sameSpot && Math.abs(r.cx) <= 2 && r.top < 80 && Math.abs(r.ahead) < 0.02 && Math.abs(r.right - 90) <= 1 && Math.abs(r.back - 180) <= 1, r); return r
+})
 await t('画面タッチ: 近くのビルに掛かる', async () => {
   const r = await p.evaluate(() => {
     const me = sky.me, c = sky.camera
@@ -219,9 +247,25 @@ await t('壁に張り付いて待つと、落ちてきた人を受けとめる�
     let said = ''
     for (let i = 0; i < 300 && !sky.rd.carry.length; i++) sky.dbg.step(3)
     said = document.getElementById('say').textContent
+    window.__juice = { hs: +sky.hitStop.toFixed(3), fl: +sky.flashA.toFixed(2), kick: +sky.fovKick.toFixed(2), op: +document.getElementById('hitflash').style.opacity }   // 同じ瞬間に測る（rAF が進むと消える）
     return { carry: sky.rd.carry.length, say: said, label: document.getElementById('cCarry').textContent }
   })
   expect(r.carry === 1 && /キャッチ/.test(r.say) && /抱え1/.test(r.label), r); return r
+})
+await t('受けとめた瞬間: ヒットストップ・光・視野が一瞬縮む（しっぽ取り v5 の演出）', async () => {
+  const r = await p.evaluate(() => window.__juice)
+  expect(r.hs >= 0.03 && r.hs <= 0.12 && r.fl > 0.5 && r.op > 0.5 && r.kick < -3, r); return r
+})
+await t('速さの線: 20m/s 未満では出ず、速いほど濃い。風の音も速さで大きくなる', async () => {
+  const r = await p.evaluate(() => {
+    const me = sky.me, out = {}
+    for (const v of [10, 30, 40]) { sky.dbg.teleport(me.x, 30, me.z); me.grounded = false; me.vx = v; me.vy = 0; me.vz = 0; sky.dbg.step(1); out['k' + v] = +window.__speedK.toFixed(2) }
+    const c = document.getElementById('speedfx'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+    let lit = 0; for (let i = 3; i < d.length; i += 4 * 7) if (d[i] > 0) lit++
+    out.lit = lit; sky.dbg.teleport(me.x, 0, me.z); sky.dbg.step(30)
+    return out
+  })
+  expect(r.k10 === 0 && r.k30 > 0 && r.k40 > r.k30 && r.lit > 50, r); return r
 })
 await t('救護マットに着地すると数取器が001になる', async () => {
   const r = await p.evaluate(() => {

@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=3'
-import { createWorld } from '../shared/track.js?v=3'
-import { buildScene } from './scene.js?v=3'
-import { FX } from './fx.js?v=3'
-import { loadSky, setAniso } from './look.js?v=3'
-import { Q } from './quality.js?v=3'
-import { RunnerModel } from './runnermodel.js?v=3'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=3'
-import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=3'
-import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=3'
-import { createBot, botInput } from '../shared/bot.js?v=3'
-import { drawCertificate } from './certificate.js?v=3'
+import { GAME } from '../shared/config.js?v=4'
+import { createWorld } from '../shared/track.js?v=4'
+import { buildScene } from './scene.js?v=4'
+import { FX } from './fx.js?v=4'
+import { loadSky, setAniso } from './look.js?v=4'
+import { Q } from './quality.js?v=4'
+import { RunnerModel } from './runnermodel.js?v=4'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=4'
+import { createRunner, stepRunner, findAnchor, rayHit, RUN } from '../shared/runner.js?v=4'
+import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=4'
+import { createBot, botInput } from '../shared/bot.js?v=4'
+import { drawCertificate } from './certificate.js?v=4'
 
 const $ = id => document.getElementById(id)
 const STEP = GAME.step
@@ -28,7 +28,7 @@ const T = {
     howTitle: '隊員手帳', ok: 'わかった',
     howItems: [
       'ビルを<b>タッチ</b>か<b>大きいボタン</b>でワイヤー。もう一回で離す',
-      'ぐらついている人のそばへ。落ちてきたら<b>空中で</b>受けとめる',
+      'ぐらついている人のそばへ。落ちてきたら受けとめる。<b>空中なら</b>点が多い',
       '壁に張り付いたら<b>上下左右に這える</b>。大きいボタンで壁から離れる',
       '地面では<b>ローリング</b>で素早く転がって移動できる',
       '抱えた人は青い<b>救護マット</b>に着地して引き渡す。続けて救うほど点が増える'
@@ -41,7 +41,7 @@ const T = {
     hintWire: 'ビルをタッチかボタンでワイヤー', hintWirePc: 'ビルをクリック（か E）でワイヤー',
     hintClimb: '壁ではスティックで這う。大きいボタンで離れる', hintMat: '青い救護マットに着地して引き渡そう',
     warnTag: s => `あと${s}秒`, falling: 'わーっ！', full: 'もう抱えられない！',
-    caught: (h, sw) => sw ? `スイングキャッチ！ 地上${h}m` : `キャッチ！ 地上${h}m`,
+    caught: (h, sw, g) => g ? '地面でキャッチ' : sw ? `スイングキャッチ！ 地上${h}m` : `キャッチ！ 地上${h}m`,
     saveMsg: (n, p) => `${n}人引き渡した +${p}点`, missTag: '受けとめそこねた',
     timeUp: '交代の時間',
     chief: '町内会長　宙野 守', again: 'もう一回', save: '画像を保存', post: 'Xでポスト', toTitle: 'タイトル',
@@ -56,7 +56,7 @@ const T = {
     howTitle: 'Field notes', ok: 'Got it',
     howItems: [
       '<b>Tap</b> a building or the big button to swing. Press again to let go',
-      'Get close to anyone wobbling. When they fall, catch them <b>in the air</b>',
+      'Get close to anyone wobbling and catch them. <b>Mid-air</b> catches score more',
       'On a wall you can <b>crawl in any direction</b>. The big button lets go of the wall',
       'On the ground, <b>roll</b> to get somewhere fast',
       'Land on a blue <b>rescue mat</b> to hand them over. Streaks score more'
@@ -69,7 +69,7 @@ const T = {
     hintWire: 'Tap a building or the big button to wire', hintWirePc: 'Click a building (or E) to wire',
     hintClimb: 'Crawl with the stick. The big button lets go', hintMat: 'Land on a blue rescue mat to hand them over',
     warnTag: s => `${s}s`, falling: 'Waaah!', full: 'Hands full!',
-    caught: (h, sw) => sw ? `Swing catch! ${h}m up` : `Caught! ${h}m up`,
+    caught: (h, sw, g) => g ? 'Ground catch' : sw ? `Swing catch! ${h}m up` : `Caught! ${h}m up`,
     saveMsg: (n, p) => `Handed over ${n} +${p}`, missTag: 'Missed',
     timeUp: 'Shift over',
     chief: 'Neighborhood Chief', again: 'Again', save: 'Save image', post: 'Post on X', toTitle: 'Title',
@@ -95,7 +95,7 @@ Snd.def({
   wire: ['snd/swish-1.mp3', 'snd/swish-2.mp3', 'snd/swish-3.mp3'], hook: ['snd/metalClick.mp3', 'snd/metal_02.mp3'],
   land: ['snd/footstep_01.mp3', 'snd/footstep_02.mp3'], bonk: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'],
   grunt: ['snd/grunt_01.mp3', 'snd/grunt_02.mp3', 'snd/grunt_03.mp3', 'snd/grunt_04.mp3'],
-  roll: 'snd/swish-5.mp3', alert: 'snd/bong.mp3', catch: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'], save: 'snd/confirm.mp3', applause: 'snd/applause.mp3',
+  roll: 'snd/swish-5.mp3', whoosh: 'snd/swish-5.mp3', alert: 'snd/bong.mp3', catch: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'], save: 'snd/confirm.mp3', applause: 'snd/applause.mp3',
   thud: 'snd/drop.mp3', boing: 'snd/spring.mp3', pop: 'snd/plop.mp3', click: 'snd/click_001.mp3', tick: 'snd/tick_002.mp3', ding: 'snd/bell_ding1.mp3',
   win: 'snd/jingles_SAX01.mp3', meh: 'snd/jingles_SAX03.mp3', lose: 'snd/jingles_PIZZA07.mp3'
 })
@@ -201,6 +201,7 @@ let demo = null
 let paused = false, dbgPause = false, endAt = 0, photo = null, photoScore = -1
 const touchMode = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
 document.body.classList.toggle('is-touch', touchMode)
+let hitStop = 0, fovKick = 0, flashA = 0   // 受けとめた・引き渡した瞬間に少し止める・視野を一瞬動かす・光る（しっぽ取り v5 と同じ）
 const cam = { hd: 0, pitch: 0.15, userT: -1e9, pos: new THREE.Vector3(), off: new THREE.Vector3(-6, 3, 0), look: new THREE.Vector3(), lookOff: new THREE.Vector3(), fov: 64 }
 const _v = new THREE.Vector3(), _w = new THREE.Vector3()
 const photoCam = new THREE.PerspectiveCamera(50, 4 / 3, 0.3, 2400)
@@ -373,24 +374,19 @@ function updateHud(dt) {
   const goal = goMat ? _w.set(m.x, 3, m.z) : _w.set(f.x, f.y + 1, f.z)
   ar.classList.remove('hidden'); ar.classList.toggle('mat', !!goMat)
   $('arrowD').textContent = Math.round(Math.hypot(goal.x - me.x, goal.z - me.z)) + 'm'
-  const p = project(goal.x, goal.y, goal.z)
-  const W = innerWidth, H = innerHeight
-  let sx = p.x, sy = p.y
-  const off = p.behind || sx < 40 || sx > W - 40 || sy < 90 || sy > H - 40
-  if (!off && !goMat) ar.classList.add('hidden')   // 画面の中の人は吹き出しで分かる
-  else if (!off) { ar.style.left = sx + 'px'; ar.style.top = Math.max(150, sy - 30) + 'px'; ar.querySelector('svg').style.transform = 'rotate(180deg)' }
-  else {
-    let dx = sx - W / 2, dy = sy - H / 2
-    if (p.behind) { dx = -dx; dy = -dy; if (Math.abs(dy) < 1) dy = H }
-    const kk = Math.min((W / 2 - 44) / Math.abs(dx || 1e-6), (H / 2 - 90) / Math.abs(dy || 1e-6))
-    sx = W / 2 + dx * kk; sy = H / 2 + dy * kk
-    for (const rc of [$('counter').getBoundingClientRect(), $('watch').getBoundingClientRect(), sayT > 0 ? $('say').getBoundingClientRect() : { left: 0, right: 0, top: 0, bottom: 0 }]) if (sx > rc.left - 30 && sx < rc.right + 30 && sy > rc.top - 30 && sy < rc.bottom + 30) sy = rc.bottom + 36
-    ar.style.left = sx + 'px'; ar.style.top = sy + 'px'
-    ar.querySelector('svg').style.transform = `rotate(${Math.atan2(dx, -dy)}rad)`
-  }
+  // 方角だけを示す（2026-11-03 本人「矢印がすごい分かりづらい。高さを表現すると分かりづらい。方角だけでいい」）: 画面の上の真ん中に固定、水平の向きだけで回る
+  ar.querySelector('svg').style.transform = `rotate(${compassAng(goal.x, goal.z)}rad)`
   // 落ちる位置の目印
   dropRing.visible = !goMat && !!f
   if (f) dropRing.position.set(f.fx, f.ground + 0.06, f.fz)
+}
+
+// カメラの前向き（水平）に対して、自分から目標 (x, z) がどっちか。0 = 正面、+ = 右。高さは使わない
+function compassAng(gx, gz) {
+  camera.updateMatrixWorld()   // HUD はカメラを動かした後・描く前に呼ばれるので、今のカメラの向きにそろえる
+  const e = camera.matrixWorld.elements, fx = -e[8], fz = -e[10], rx = -fz, rz = fx   // 右 = 前を右へ90度（傾きの影響を受けない）
+  const dx = gx - me.x, dz = gz - me.z
+  return Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz)
 }
 
 // ---------------------------------------------------------------- 出来事
@@ -405,6 +401,7 @@ function onRunnerEvent(e) {
     if (e.far && tp && tp.sx != null) { const el = $('miss'); el.style.left = tp.sx + 'px'; el.style.top = tp.sy + 'px'; el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; clearTimeout(el._t); el._t = setTimeout(() => el.classList.add('hidden'), 800) }
   } else if (e.t === 'land') { sfx('land', { vol: Math.min(1, 0.3 + e.impact / 20) }); if (e.impact > 14) { sfx('bonk', { vol: 0.5 }); fx.addShake(Math.min(0.6, e.impact / 40)) } }
   else if (e.t === 'bonk') { sfx('bonk', { vol: 0.8 }); fx.addShake(0.4) }
+  else if (e.t === 'unwire' && !e.auto) { const v = Math.hypot(me.vx, me.vy, me.vz); if (v > 16) { sfx('whoosh', { vol: Math.min(0.8, v / 50), rate: 0.9 + Math.random() * 0.2 }); fovKick = Math.min(6, (v - 16) * 0.3) } }   // 速く離すと風を切る
   else if (e.t === 'climb' && !shownClimb) { shownClimb = true; say(t('hintClimb'), 2.4) }
 }
 function onCatchEvent(e) {
@@ -413,13 +410,16 @@ function onCatchEvent(e) {
   else if (e.t === 'fall') sfx('grunt', { vol: 0.6 })
   else if (e.t === 'catch') {
     sfx('catch', { vol: 0.9 }); sfx('pop', { vol: 0.6, delay: 0.05 })
-    fx.addShake(0.25)
-    say(`${t('caught')(e.h, e.swing)}<small>${L2(LINES.thanks[e.id % LINES.thanks.length])}</small>`, 1.8)
+    fx.addShake(e.ground ? 0.25 : e.swing ? 0.6 : 0.4); hitStop = e.ground ? 0.04 : e.swing ? 0.1 : 0.07; fovKick = e.ground ? -3 : -7; flashA = e.ground ? 0.5 : 1
+    fx.debrisAt(e.x, e.y + 1, e.z, 16, 0xfff1c8, { speed: 9, up: 5, size: 0.12 })
+    say(`${t('caught')(e.h, e.swing, e.ground)}<small>${L2(LINES.thanks[e.id % LINES.thanks.length])}</small>`, 1.8)
     const sc = e.h + (e.swing ? 20 : 0)
     if (sc > photoScore) { photoScore = sc; snapNext = true }
     if (!shownMat) { shownMat = true; setTimeout(() => { if (mode === 'play' && rd && rd.carry.length) say(t('hintMat'), 2.6) }, 2000) }
   } else if (e.t === 'save') {
     sfx('save', { vol: 0.8 }); sfx('applause', { vol: 0.6, delay: 0.1 })
+    hitStop = Math.min(0.12, 0.05 + e.n * 0.025); flashA = Math.max(flashA, 0.6 + e.n * 0.15); fovKick = -4; fx.addShake(0.3 + e.n * 0.1)
+    if (e.mat) fx.debrisAt(e.mat.x, (e.mat.y || 0) + 0.6, e.mat.z, 10 + e.n * 6, 0x3a8fd8, { speed: 7, up: 6, size: 0.1 })
     say(t('saveMsg')(e.n, e.pts), 2)
   } else if (e.t === 'miss') {
     sfx('thud', { vol: 0.8 }); sfx('boing', { vol: 0.5, delay: 0.08 })
@@ -498,9 +498,14 @@ function updateCamera(dt, c) {
   camera.lookAt(cam.look)
   const asp = camera.aspect
   const base = asp >= 1 ? 60 : Math.min(84, 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(37)) / asp) * 180 / Math.PI)
-  const fov = base + Math.min(12, Math.hypot(c.vx, c.vy, c.vz) * 0.28)
+  const fov = base + Math.min(18, Math.max(0, Math.hypot(c.vx, c.vy, c.vz) - 6) * 0.5)   // 速いほど広く（最大 +12 から +18 に）
   cam.fov += (fov - cam.fov) * (1 - Math.exp(-dt * 4))
-  camera.fov = cam.fov; camera.updateProjectionMatrix()
+  fovKick *= Math.exp(-dt * 6)
+  camera.fov = cam.fov + fovKick; camera.updateProjectionMatrix()
+  // 振り子の向きに少しだけ体ごと傾く（カメラの右向きに対する横の速さから）
+  const me_ = camera.matrixWorld.elements, rl = Math.hypot(me_[0], me_[2]) || 1, lat = (c.vx * me_[0] + c.vz * me_[2]) / rl
+  cam.bank = (cam.bank || 0) + (Math.max(-0.1, Math.min(0.1, (c.rope ? lat : 0) * -0.004)) - (cam.bank || 0)) * (1 - Math.exp(-dt * 3))
+  camera.rotateZ(cam.bank)
 }
 
 // ---------------------------------------------------------------- ループ
@@ -529,9 +534,36 @@ function frame() {
   requestAnimationFrame(frame)
   const now = performance.now()
   let dt = Math.min(0.1, (now - last) / 1000); last = now
-  if (!dbgPause) { acc += dt; let n = 0; while (acc >= STEP && n < 6) { stepOnce(); acc -= STEP; n++ } if (n >= 6) acc = 0 }
+  if (hitStop > 0) { hitStop -= dt; acc = 0 }   // ヒットストップ: ほんの一瞬だけ止める
+  else if (!dbgPause) { acc += dt; let n = 0; while (acc >= STEP && n < 6) { stepOnce(); acc -= STEP; n++ } if (n >= 6) acc = 0 }
   else dt = 0
   render(dt || 0.016)
+}
+// 速さの線: 画面のふちから中心へ流れる白い線。速いほど多く濃く（20m/s から。しっぽ取り v5 と同じ）
+const spd = $('speedfx'), sctx = spd.getContext('2d'), hf = $('hitflash')
+const lines = Array.from({ length: 46 }, () => ({ a: Math.random() * Math.PI * 2, p: Math.random(), s: 0.6 + Math.random() * 0.8, w: 1 + Math.random() * 2 }))
+let spdOn = false
+function drawSpeed(v, dt) {
+  if (!window.__holdFx) flashA = Math.max(0, flashA - dt * 5)   // __holdFx: 撮影用に光を止めておく
+  hf.style.opacity = flashA.toFixed(2)
+  const k = Math.max(0, Math.min(1, (v - 20) / 18))
+  window.__speedK = k
+  if (k <= 0) { if (spdOn) { sctx.clearRect(0, 0, spd.width, spd.height); spdOn = false } return }
+  spdOn = true
+  const W = innerWidth, H = innerHeight, dpr = Math.min(2, devicePixelRatio || 1)
+  if (spd.width !== Math.round(W * dpr) || spd.height !== Math.round(H * dpr)) { spd.width = Math.round(W * dpr); spd.height = Math.round(H * dpr) }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0); sctx.clearRect(0, 0, W, H)
+  const cx = W / 2, cy = H * 0.45, R = Math.hypot(W, H) * 0.55
+  sctx.lineCap = 'round'
+  const n = Math.round(lines.length * (0.35 + 0.65 * k))
+  for (let i = 0; i < n; i++) {
+    const L = lines[i]
+    L.p += dt * L.s * (1.6 + k * 2.4); if (L.p > 1) { L.p -= 1; L.a = Math.random() * Math.PI * 2 }
+    const r1 = R * (1.05 - L.p * 0.45), r0 = r1 - R * (0.12 + 0.2 * k) * L.s
+    const ca = Math.cos(L.a), sa = Math.sin(L.a)
+    sctx.strokeStyle = `rgba(255,255,255,${(0.1 + 0.32 * k) * Math.min(1, L.p * 4)})`; sctx.lineWidth = L.w
+    sctx.beginPath(); sctx.moveTo(cx + ca * r0, cy + sa * r0); sctx.lineTo(cx + ca * r1, cy + sa * r1); sctx.stroke()
+  }
 }
 // 1人目はおんぶ（後ろから見える）、2人目は肩車、3人目は前に抱っこ
 const CARRY = [{ p: [0, 0.82, -0.36], r: [0.3, 0, 0] }, { p: [0, 1.62, -0.08], r: [-0.1, 0, 0] }, { p: [0, 0.7, 0.36], r: [-0.2, Math.PI, 0] }]
@@ -575,7 +607,8 @@ function render(dt) {
   aimMark.visible = false
   if (mode === 'play' && me && !me.rope && !touchMode && frameN % 4 === 0) aimMark.userData.p = findAnchor(world, me)
   if (mode === 'play' && me && !me.rope && !touchMode && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position) }
-  if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = Math.min(0.5, Math.max(0, (v3 - 8) / 40)) }
+  if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) wl.g.gain.value = Math.min(0.75, Math.max(0, (v3 - 6) / 32)) }
+  drawSpeed(mode === 'play' && me ? Math.hypot(me.vx, me.vy, me.vz) : 0, dt)
   if (mode !== 'play') dropRing.visible = false
   fx.update(dt)
   fx.shake = Math.max(0, fx.shake - dt * 2.5)
@@ -605,12 +638,12 @@ function render(dt) {
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.sky = {
-  get mode() { return mode }, log, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
+  get mode() { return mode }, log, get hitStop() { return hitStop }, get flashA() { return flashA }, get fovKick() { return fovKick }, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
   start: seed => startRound(seed), toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
     teleport: (x, y, z, yaw) => { Object.assign(me, { x, y, z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, grounded: y < 0.1 }); if (yaw != null) me.yaw = yaw },
-    pressWire: (sx, sy) => aimAt(sx, sy), pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
+    pressWire: (sx, sy) => aimAt(sx, sy), compass: (x, z) => compassAng(x, z), pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
     keys, stick, say, get model() { return model }, fallTime
   }
 }

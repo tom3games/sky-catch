@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&family=Klee+One:wght@600&family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -57,6 +57,7 @@
 </section>
 
 <!-- 遊び中 -->
+<canvas id="speedfx"></canvas><div id="hitflash"></div>
 <section id="hud" class="hidden">
   <div id="counter" class="counter" aria-label="救助した人数">
     <div class="c-win"><span id="cNum">000</span></div>
@@ -127,7 +128,7 @@
   },9000);
 })();
 </script>
-<script src="sfx.js?v=3"></script>
-<script type="module" src="js/game.js?v=3"></script>
+<script src="sfx.js?v=4"></script>
+<script type="module" src="js/game.js?v=4"></script>
 </body>
 </html>

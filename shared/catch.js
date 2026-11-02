@@ -5,19 +5,21 @@ export const CATCH = {
   roundSec: 90,           // 1回の長さ
   warn: 5.5,              // 屋上のふちでぐらつく時間（この間に向かう）
   // 2026-11-02 本人「難しすぎる。みんな連続で落ちていくから間に合わへん」→ 落ちてくるのは一度に1人。前の人が片付いて（受けとめた・落ちた）から gap 秒あけて次
-  gap: [3, 2.2],          // 前の人が片付いてから次の人が出るまでの秒数（はじめ → 終わりにかけて短く）
+  gap: [2.6, 1.8],        // 前の人が片付いてから次の人が出るまでの秒数（はじめから終わりにかけて短く）。2026-11-03 本人「ちょっと簡単になりすぎ」で 3 と 2.2 から 2.6 と 1.8 に
   firstAt: 2.5,
-  maxActive: 1,           // 同時にぐらつく・落ちている人の上限
+  maxActive: 1,           // 同時にぐらつく・落ちている人の上限（前半）
+  pairAfter: 40, pairOdds: 0.35,   // 後半（40秒から）はときどき2人同時（同上。別々の建物）
   fallG: 5,             // 落ちる加速（人より遅い。手足をばたつかせて空気を受けている設定）
   fallMax: 6.5,           // 落ちる速さの上限
-  catchR: 4.6,            // 横の距離（3.4→4.6。2026-11-02 難しすぎる）
-  catchV: 6,              // 縦の差（4.5→6）
+  catchR: 4,              // 横の距離（3.4、4.6 を経て 4。2026-11-03 少し難しく戻す）
+  catchV: 5.4,            // 縦の差（4.5、6 を経て 5.4）
   assistR: 14, assistA: 22,   // 空中でこの距離に入ると、落ちてくる人へ少し引き寄せられる（手を伸ばす）
            // この距離まで近づけば受けとめる（胸の高さどうし）
-  catchAir: 1.9,          // 足元の地面からこれ以上高い所にいないと受けとめられない（地面で待ち構えるのは無し）
+  catchAir: 1.9,          // 足元の地面からこれ以上高い所＝空中の受けとめ。2026-11-03 本人「地面でキャッチできない」で地面でも受けとめられるようにした（点は少なめ・連続にならない）
   carryMax: 3,            // 一度に抱えられる人数
   matR: 4.6,              // 救護マットのこの範囲に着地すれば引き渡し
   ptsSave: 100, ptsChain: 50, ptsSwing: 50,   // 1人ごと / 連続の上乗せ（1つ増えるごと）/ ワイヤー中に受けとめた
+  ptsGround: 60,          // 地面で受けとめた人（連続の上乗せ・ワイヤーの上乗せ無し。連続は切れない）
   chainMax: 6,
   nearMin: 25, nearMax: 80,                  // 次の人は、自分から この範囲の建物に出る（近くに高い建物が無ければ範囲を広げる）
   hMin: 30, hMax: 62      // 落ちる人がいるベランダ・窓の高さ（16〜44 → 30〜62。2026-11-02 本人「もうちょっと高い場所から落ちてくれへんと余裕がない」）
@@ -122,9 +124,14 @@ export function stepCatch(rd, r, dt, world) {
   if (rd.t >= CATCH.roundSec) { rd.over = true; rd.events.push({ t: 'timeUp' }); return }
   // 次の人
   const busy = rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall').length
-  if (busy >= CATCH.maxActive) rd.next = Math.max(rd.next, rd.t + gapNow(rd))   // 落ちている人がいる間は次を出さない。片付いてから gap 秒
+  const maxA = rd.t >= CATCH.pairAfter && rd.pair ? 2 : CATCH.maxActive
+  if (busy >= maxA) rd.next = Math.max(rd.next, rd.t + gapNow(rd))   // 落ちている人がいる間は次を出さない。片付いてから gap 秒
   else if (rd.t >= rd.next) {
-    if (spawn(rd, world, r)) rd.next = rd.t + gapNow(rd)
+    if (spawn(rd, world, r)) {
+      // 後半はときどき、すぐもう1人（2人同時）
+      if (!rd.pair && busy === 0 && rd.t >= CATCH.pairAfter && rd.rnd() < CATCH.pairOdds) { rd.pair = true; rd.next = rd.t + 0.8 }
+      else { rd.pair = false; rd.next = rd.t + gapNow(rd) }
+    }
     else rd.next = rd.t + 0.5
   }
   const air = !r.grounded && (r.y - (r.groundY || 0)) > CATCH.catchAir
@@ -141,14 +148,14 @@ export function stepCatch(rd, r, dt, world) {
         const L = Math.hypot(f.x - r.x, dv, f.z - r.z) || 1, a = CATCH.assistA * dt
         r.vx += (f.x - r.x) / L * a; r.vz += (f.z - r.z) / L * a; r.vy += dv / L * a * 0.6
       }
-      if (dh < CATCH.catchR && Math.abs(dv) < CATCH.catchV && air) {
+      if (dh < CATCH.catchR && Math.abs(dv) < CATCH.catchV) {   // 空中でも地面でも（地面は点が少ない）
         if (rd.carry.length >= CATCH.carryMax) { if (rd.fullT <= 0) { rd.fullT = 1.5; rd.events.push({ t: 'full' }) } }
         else {
           f.state = 'carried'; f.slot = rd.carry.length; rd.carry.push(f); rd.caught = (rd.caught || 0) + 1
           const swing = !!r.rope
           if (swing) rd.swingCatches++
-          f.swing = swing; f.catchY = Math.round(f.y - f.ground)
-          rd.events.push({ t: 'catch', id: f.id, swing, h: f.catchY, n: rd.carry.length, x: f.x, y: f.y, z: f.z })
+          f.swing = swing; f.catchY = Math.round(f.y - f.ground); f.onGround = !air
+          rd.events.push({ t: 'catch', id: f.id, swing, h: f.catchY, n: rd.carry.length, x: f.x, y: f.y, z: f.z, ground: !air })
           continue
         }
       }
@@ -167,10 +174,12 @@ export function stepCatch(rd, r, dt, world) {
     if (m) {
       let pts = 0
       for (const f of rd.carry) {
-        rd.chain++; rd.bestChain = Math.max(rd.bestChain, rd.chain); rd.saved++
-        const p = CATCH.ptsSave + CATCH.ptsChain * (Math.min(rd.chain, CATCH.chainMax) - 1) + (f.swing ? CATCH.ptsSwing : 0)
+        rd.saved++
+        let p
+        if (f.onGround) p = CATCH.ptsGround   // 地面で受けとめた人は少なめ・連続に数えない
+        else { rd.chain++; rd.bestChain = Math.max(rd.bestChain, rd.chain); p = CATCH.ptsSave + CATCH.ptsChain * (Math.min(rd.chain, CATCH.chainMax) - 1) + (f.swing ? CATCH.ptsSwing : 0) }
         pts += p; f.state = 'saved'; f.t = 0; f.x = m.x + (f.slot - 1) * 1.1; f.z = m.z + 1.2; f.y = m.y
-        rd.log.push({ id: f.id, reason: f.reason, ok: true, swing: f.swing, h: f.catchY, pts: p })
+        rd.log.push({ id: f.id, reason: f.reason, ok: true, swing: f.swing, ground: f.onGround, h: f.catchY, pts: p })
       }
       rd.score += pts
       rd.events.push({ t: 'save', n: rd.carry.length, pts, chain: rd.chain, mat: m })
