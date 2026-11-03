@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=9'
-import { createWorld } from '../shared/track.js?v=9'
-import { buildScene } from './scene.js?v=9'
-import { FX } from './fx.js?v=9'
-import { loadSky, setAniso } from './look.js?v=9'
-import { Q } from './quality.js?v=9'
-import { RunnerModel } from './runnermodel.js?v=9'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=9'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=9'
-import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=9'
-import { createBot, botInput } from '../shared/bot.js?v=9'
-import { drawCertificate } from './certificate.js?v=9'
+import { GAME } from '../shared/config.js?v=10'
+import { createWorld } from '../shared/track.js?v=10'
+import { buildScene } from './scene.js?v=10'
+import { FX } from './fx.js?v=10'
+import { loadSky, setAniso } from './look.js?v=10'
+import { Q } from './quality.js?v=10'
+import { RunnerModel } from './runnermodel.js?v=10'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=10'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=10'
+import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=10'
+import { createBot, botInput } from '../shared/bot.js?v=10'
+import { drawCertificate } from './certificate.js?v=10'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）

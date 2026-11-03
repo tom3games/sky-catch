@@ -8,7 +8,9 @@ export const CATCH = {
   gap: [2.6, 1.8],        // 前の人が片付いてから次の人が出るまでの秒数（はじめから終わりにかけて短く）。2026-11-03 本人「ちょっと簡単になりすぎ」で 3 と 2.2 から 2.6 と 1.8 に
   firstAt: 2.5,
   maxActive: 1,           // 同時にぐらつく・落ちている人の上限（前半）
-  pairAfter: 40, pairOdds: 0.35,   // 後半（40秒から）はときどき2人同時（同上。別々の建物）
+  pairAfter: 40, pairOdds: 0.35,   // 後半（40秒から）はときどき2人（近くの建物に）
+  fallGap: 3.5,           // 前の人が落ち始めてから次の人が落ち始めるまでの最低の秒（ぐらつきは重なってよい。落下は重ねない）
+  nearPair: [6, 20],      // 2人目を出す距離（1人目の落ちる位置から m）
   fallG: 5,             // 落ちる加速（人より遅い。手足をばたつかせて空気を受けている設定）
   fallMax: 6.5,           // 落ちる速さの上限
   catchR: 4,              // 横の距離（3.4、4.6 を経て 4。2026-11-03 少し難しく戻す）
@@ -31,6 +33,7 @@ export const ENDLESS = {
   active: [[0, 1], [30, 2], [75, 3], [140, 4]],   // [秒, 同時の上限]。最初の30秒は1人ずつ
   warn: [7.5, 4.5], warnK: 0.015,    // ぐらつく時間: 最初は 7.5秒（余裕）から少しずつ短く
   near: [45, 0.3],                   // 次の人が出る距離の上限: 最初は 45m 以内、1秒ごとに 0.3m 広がる（80m まで）
+  fallGap: [3.5, 2], fallGapK: 0.01,   // 落ち始めの最低間隔: 3.5秒から少しずつ詰めて最短2秒
   easyUntil: 30                      // 最初の30秒は落ち方の速い種類（猫・ふくよかな人）を出さない
 }
 
@@ -104,6 +107,24 @@ export function makeMats(world) {
 }
 
 // 次の人を置く建物を探す。自分から nearMin〜nearMax、道に面したふち
+// 2人目は1人目の近く（同じ建物か隣の建物、20m 以内）に出す（2026-11-03 本人「2人ほぼ同時に落下してくる」。受けとめた勢いのまま次へ向かえるように）
+function pickNear(world, rnd, f0, others) {
+  const blds = world._catchBlds || (world._catchBlds = world.colliders.filter(o => o.kind === 'building' && o.y1 >= CATCH.hMin + 4))
+  const cand = blds.filter(o => !o.yaw && Math.abs(o.cx - f0.fx) < o.hw + 22 && Math.abs(o.cz - f0.fz) < o.hl + 22)
+  for (let g = 0; g < 400 && cand.length; g++) {
+    const o = cand[Math.floor(rnd() * cand.length)], side = Math.floor(rnd() * 4)
+    const nx = [1, -1, 0, 0][side], nz = [0, 0, 1, -1][side], along = (rnd() * 2 - 1) * 0.8
+    const ex = o.cx + (nx ? nx * o.hw : along * o.hw), ez = o.cz + (nz ? nz * o.hl : along * o.hl)
+    const d = Math.hypot(ex + nx * 1.3 - f0.fx, ez + nz * 1.3 - f0.fz)
+    if (d < CATCH.nearPair[0] || d > CATCH.nearPair[1]) continue
+    if (world.surfaceAt(ex + nx * 7, ez + nz * 7) !== 'road' || world.surfaceAt(ex + nx * 12, ez + nz * 12) !== 'road') continue
+    if (world.colliders.some(b => b !== o && b.kind === 'building' && Math.abs(ex + nx * 6 - b.cx) < b.hw + 1 && Math.abs(ez + nz * 6 - b.cz) < b.hl + 1)) continue
+    if (others.some(f => Math.hypot(f.x - ex, f.z - ez) < CATCH.nearPair[0])) continue
+    const h = Math.min(o.y1 - 2, CATCH.hMin + rnd() * (CATCH.hMax - CATCH.hMin))
+    return { ex, ez, nx, nz, top: h, roof: o.y1, bld: o }
+  }
+  return null
+}
 function pickSpot(world, r, rnd, others, nearMax = CATCH.nearMax) {
   const blds = world._catchBlds || (world._catchBlds = world.colliders.filter(o => o.kind === 'building' && o.y1 >= CATCH.hMin + 4))
   for (let g = 0; g < 1200; g++) {
@@ -136,7 +157,8 @@ export function createRound(world, seed = 1, mode = 'normal') {
 
 // 落ちてくる人: state = warn（ベランダのふちでぐらつく）→ fall（落ちている）→ carried（抱えられている）/ landed（地面に落ちた）/ saved
 function spawn(rd, world, r) {
-  const sp = pickSpot(world, r, rd.rnd, rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall'), rd.mode === 'endless' ? Math.min(CATCH.nearMax, ENDLESS.near[0] + rd.t * ENDLESS.near[1]) : CATCH.nearMax)
+  const act = rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall')
+  const sp = (act.length && pickNear(world, rd.rnd, act[act.length - 1], act)) || pickSpot(world, r, rd.rnd, act, rd.mode === 'endless' ? Math.min(CATCH.nearMax, ENDLESS.near[0] + rd.t * ENDLESS.near[1]) : CATCH.nearMax)
   if (!sp) return false
   const kind = pickKind(rd), K = KINDS[kind], KL = KIND_LINES[kind]
   const reason = Math.floor(rd.rnd() * (KL ? KL.why.length : REASONS.length))
@@ -193,7 +215,8 @@ export function stepCatch(rd, r, dt, world) {
   for (const f of rd.fallers) {
     f.t += dt
     if (f.state === 'warn') {
-      if (f.t >= (f.warnT || CATCH.warn)) { f.state = 'fall'; f.t = 0; f.x = f.fx; f.z = f.fz; f.vy = 1.5; rd.events.push({ t: 'fall', id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z }) }
+      const gapF = rd.mode === 'endless' ? Math.max(ENDLESS.fallGap[1], ENDLESS.fallGap[0] - rd.t * ENDLESS.fallGapK) : CATCH.fallGap
+      if (f.t >= (f.warnT || CATCH.warn) && rd.t - (rd.lastFall ?? -99) >= gapF) { rd.lastFall = rd.t; f.state = 'fall'; f.t = 0; f.x = f.fx; f.z = f.fz; f.vy = 1.5; rd.events.push({ t: 'fall', id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z }) }
     } else if (f.state === 'fall') {
       const K = KINDS[f.kind] || KINDS.normal
       f.vy = Math.max(-K.fallMax, f.vy - K.fallG * dt)
