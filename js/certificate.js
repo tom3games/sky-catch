@@ -40,12 +40,17 @@ export function drawCertificate(cv, d) {
   x.textAlign = 'left'; x.fillStyle = '#1b1712'
   const stat = (lab, val, yy, big) => { x.font = `700 28px ${SANS}`; x.fillStyle = '#6b5a3a'; x.fillText(lab, sx, yy); x.font = `700 ${big ? 76 : 46}px ${SANS}`; x.fillStyle = '#1b1712'; x.fillText(val, sx, yy + (big ? 76 : 50)) }
   stat(ja ? '救った人' : 'Saved', ja ? `${d.saved}名` : `${d.saved}`, y + 20, true)
-  stat(ja ? '連続で救った' : 'Best streak', ja ? `${d.chain}名` : `${d.chain}`, y + 150)
-  stat(ja ? '点数' : 'Score', `${d.score}`, y + 250)
+  if (d.endless) {   // エンドレス: 続いた秒
+    stat(ja ? '続いた時間' : 'Lasted', ja ? `${d.sec}秒` : `${d.sec}s`, y + 150)
+    stat(ja ? '点数' : 'Score', `${d.score}`, y + 250)
+  } else {
+    stat(ja ? '連続で救った' : 'Best streak', ja ? `${d.chain}名` : `${d.chain}`, y + 150)
+    stat(ja ? '点数' : 'Score', `${d.score}`, y + 250)
+  }
   y += 300
   // 今日の記録（1人ずつ）
   x.font = `700 28px ${SANS}`; x.fillStyle = '#6b5a3a'
-  x.fillText(ja ? '本日の記録' : "Today's log", 130, y + 20)
+  x.fillText(d.endless ? (ja ? 'エンドレスの記録' : 'Endless log') : (ja ? '本日の記録' : "Today's log"), 130, y + 20)
   x.font = `600 27px ${HAND}`
   const maxRows = Math.max(1, Math.floor((H - 196 - (y + 64)) / 38))
   const all = d.rows.length ? d.rows : [{ text: ja ? '（落ちてきた人はいなかった）' : '(nobody fell)', ok: true }]

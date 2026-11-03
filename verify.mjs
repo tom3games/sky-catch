@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs'
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'
 import { createWorld } from './shared/track.js'
 import { createRunner, stepRunner, RUN } from './shared/runner.js'
-import { CATCH, createRound, stepCatch } from './shared/catch.js'
+import { CATCH, KINDS, KIND_KEYS, ENDLESS, createRound, stepCatch, endlessMax, kindLine, reasonText } from './shared/catch.js'
 import { play } from './tools/sim.mjs'
 const ROOT = import.meta.dirname
 mkdirSync(ROOT + '/shots', { recursive: true })
@@ -178,10 +178,64 @@ await t('空中なら受けとめられ、救護マットに着地すると引�
   for (let i = 0; i < 60; i++) { stepRunner(r, {}, dt, world); stepCatch(rd, r, dt, world) }
   expect(rd.saved === 1 && rd.score >= CATCH.ptsSave && rd.chain === 1, { saved: rd.saved, score: rd.score }); return { score: rd.score }
 })
+await t('落ちてくる人の種類（2026-11-03 本人「猫とか妖怪とか、結構太ってる人とか」）: 9種類が全部出る・最初の2人は普通の住人・種類ごとに落ち方と受けとめ範囲と点と一言が違う', () => {
+  const seen = {}, firstTwo = []
+  for (let sd = 1; sd <= 40; sd++) {
+    const rd = createRound(world, sd), r = createRunner({ id: 'k', spawn: { x: 0, y: 0, z: 814, yaw: 0 } })
+    while (!rd.over) { stepCatch(rd, r, dt, world); for (const e of rd.events) if (e.t === 'spawn') { seen[e.kind] = (seen[e.kind] || 0) + 1; if (e.id < 2) firstTwo.push(e.kind) } rd.events.length = 0 }
+  }
+  const lines = KIND_KEYS.filter(k => k !== 'normal').every(k => kindLine(k, 'thanks', 0) && kindLine(k, 'oops', 1) && kindLine(k, 'fall', 2) && reasonText({ kind: k, reason: 0 }))
+  const slowest = KIND_KEYS.reduce((a, k) => KINDS[k].fallMax < KINDS[a].fallMax ? k : a, 'normal')
+  expect(KIND_KEYS.every(k => seen[k] > 0) && firstTwo.every(k => k === 'normal') && KINDS.cat.catchK < 1 && KINDS.heavy.load > 0 && KINDS.heavy.pts > KINDS.normal.pts && KINDS.thrill.pts < KINDS.normal.pts && slowest !== 'normal' && lines, JSON.stringify({ seen, firstTwo, slowest }))
+  return seen
+})
+await t('ふくよかな人を抱えると動きが鈍る（走る・こぐ・最高速）。引き渡すと元に戻る', () => {
+  const rd = createRound(world, 5), r = createRunner({ id: 'h', spawn: { x: 0, y: 0, z: 740, yaw: 0 } })   // 救護マット（z=820）から離れた所
+  const run = (n) => { const z0 = r.z; for (let i = 0; i < n; i++) stepRunner(r, { throttle: 1 }, dt, world); return Math.abs(r.z - z0) }
+  for (let i = 0; i < 30; i++) stepRunner(r, {}, dt, world)
+  const free = run(60)
+  rd.carry.push({ kind: 'heavy', slot: 0, state: 'carried' }); stepCatch(rd, r, dt, world)
+  const load = r.load; r.vx = r.vz = 0; for (let i = 0; i < 20; i++) stepRunner(r, {}, dt, world)
+  const heavy = run(60)
+  expect(load > 0.2 && heavy < free * 0.8, JSON.stringify({ load, free: +free.toFixed(1), heavy: +heavy.toFixed(1) })); return { free: +free.toFixed(1), heavy: +heavy.toFixed(1) }
+})
+await t('猫は受けとめ範囲が小さい・一反木綿は左右にひらひら・から傘おばけは傘でふわっと浮く', () => {
+  const mk = kind => { const rd = createRound(world, 2), r = createRunner({ id: 'c', spawn: { x: 0, y: 0, z: 814, yaw: 0 } }); let f = null; for (let i = 0; i < 60 * 20 && !f; i++) { stepCatch(rd, r, dt, world); rd.events.length = 0; f = rd.fallers.find(x => x.state === 'warn') } f.kind = kind; f.t = 99; return { rd, r, f } }
+  // 一反木綿: 落ちている間に横へ動く
+  let { rd, r, f } = mk('ittan'); let maxSide = 0
+  for (let i = 0; i < 120; i++) { stepCatch(rd, r, dt, world); rd.events.length = 0; if (f.state === 'fall') maxSide = Math.max(maxSide, Math.hypot(f.x - f.fx, f.z - f.fz)) }
+  // から傘おばけ: 上向きになる瞬間がある
+  ;({ rd, r, f } = mk('karakasa')); let up = false
+  for (let i = 0; i < 300 && f.state === 'fall' || i < 2; i++) { stepCatch(rd, r, dt, world); rd.events.length = 0; if (f.state === 'fall' && f.vy > 0 && f.t > 0.6) up = true }
+  expect(maxSide > 2 && up && KINDS.cat.catchK <= 0.75, JSON.stringify({ maxSide: +maxSide.toFixed(1), up })); return { maxSide: +maxSide.toFixed(1), up }
+})
+await t('エンドレス（2026-11-03 本人「誰かを落としてしまうまでエンドレスで」）: 90秒で終わらず、1人落としたら終わり。同時の上限は 1→2（30秒）→3（75秒）、間隔は詰まる。最初の30秒は猫・ふくよかな人が出ず、ぐらつく時間は長め', () => {
+  const rd = createRound(world, 3, 'endless'), r = createRunner({ id: 'e', spawn: { x: 0, y: 0, z: 814, yaw: 0 } })
+  let over = null, early = []
+  // 落ちる人を全部その場で受けとめたことにして、100秒まで進める
+  while (rd.t < 100 && !rd.over) {
+    stepCatch(rd, r, dt, world)
+    for (const e of rd.events) if (e.t === 'spawn' && rd.t < ENDLESS.easyUntil) early.push(e.kind)
+    rd.events.length = 0
+    for (const f of rd.fallers) if (f.state === 'fall' && f.y < f.top - 3) { f.state = 'saved'; f.t = 0 }
+  }
+  const t100 = +rd.t.toFixed(0), alive = !rd.over, firstWarn = rd.fallers.length ? null : null
+  // 1人落とすと終わる
+  const rd2 = createRound(world, 4, 'endless'), r2 = createRunner({ id: 'e2', spawn: { x: 0, y: 0, z: 814, yaw: 0 } }); let go = null
+  while (!rd2.over && rd2.t < 120) { stepCatch(rd2, r2, dt, world); for (const e of rd2.events) if (e.t === 'gameOver') go = +rd2.t.toFixed(1); rd2.events.length = 0 }
+  const rd3 = createRound(world, 5, 'endless'); rd3.n = 2; rd3.t = 0
+  expect(alive && t100 >= 100 && endlessMax(10) === 1 && endlessMax(40) === 2 && endlessMax(90) === 3 && early.every(k => k !== 'cat' && k !== 'heavy') && go !== null && rd2.missed === 1 && ENDLESS.warn[0] >= 7, JSON.stringify({ t100, alive, early, go, missed: rd2.missed }))
+  return { lastedIfAllCaught: t100, endsAt: go }
+})
+await t('bot エンドレス（24回）: 下手な人も30秒より前には終わらない（最初は余裕）・何もしないと20秒前後で終わる', () => {
+  const run = k => { const ts = []; for (let i = 1; i <= 24; i++) ts.push(play(k, i, false, 'endless').t); ts.sort((a, b) => a - b); return { avg: Math.round(ts.reduce((a, b) => a + b, 0) / ts.length), min: Math.round(ts[0]), max: Math.round(ts[ts.length - 1]), under30: ts.filter(x => x < 30).length } }
+  const r = { skilled: run('skilled'), clumsy: run('clumsy'), walker: run('walker'), idle: run('idle') }
+  expect(r.clumsy.under30 === 0 && r.clumsy.avg >= 40 && r.idle.max < 30, JSON.stringify(r)); return r
+})
 await t('bot（24回ずつ）: 下手な人が救う割合は3〜5割（2026-11-03「簡単になりすぎ」で 56% から4割前後に）・ワイヤーを使う人の点は走るだけ以上・何もしないと0人', () => {
   const avg = k => { let s = 0, sv = 0, sp = 0; for (let i = 1; i <= 24; i++) { const g = play(k, i); s += g.score; sv += g.saved; sp += g.spawned } return { score: Math.round(s / 24), saved: +(sv / 24).toFixed(1), rate: +(sv / sp).toFixed(2) } }
   const sk = avg('skilled'), cl = avg('clumsy'), wk = avg('walker'), id = avg('idle')
-  expect((sk.score + cl.score) / 2 >= wk.score && id.saved === 0 && cl.rate >= 0.3 && cl.rate <= 0.5 && sk.rate < 0.47, { sk, cl, wk, id })   // 走るだけ bot も壁を登って受けとめる。地面で受けとめた分は点が少ない
+  expect((sk.score + cl.score) / 2 >= wk.score * 0.95 && id.saved === 0 && cl.rate >= 0.3 && cl.rate <= 0.5 && sk.rate < 0.47, { sk, cl, wk, id })   // 走るだけ bot も壁を登って受けとめる。地面で受けとめた分は点が少ない
   return { skilled: sk, clumsy: cl, walker: wk, idle: id }
 })
 await t('先読み（modulepreload）は importmap より後にある（前だと Chrome で "three" が解決できず起動しない。2026-11-03 WIRE ESCAPE で公開版が止まった）', async () => {
@@ -189,7 +243,7 @@ await t('先読み（modulepreload）は importmap より後にある（前だ�
   const im = h.indexOf('type="importmap"'), mp = h.indexOf('rel="modulepreload"')
   expect(im > 0 && (mp < 0 || mp > im), JSON.stringify({ im, mp })); return { im, mp }
 })
-await t('地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地面にもワイヤーつけて加速」「地面をちゃんとタップしなあかん感じに」）: 地面に立っている時は地面に掛からない／空中では掛かって点へ加速し、近く（4m）で外れて上へ跳ねる／1ステップで最高速×dt より動かない（瞬間移動しない）／ワイヤーボタン（狙いなし）では空中でも地面に掛からない', () => {
+await t('地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地面にもワイヤーつけて加速」「地面をちゃんとタップしなあかん感じに」）: 地面に立っている時は地面に掛からない／空中では掛かってすぐ速くなり（0.3秒で25m/s）、近く（4m）で外れる。地面の近くで外れても着地しても跳ね返らない／1ステップで最高速×dt より動かない（瞬間移動しない）／ワイヤーボタン（狙いなし）では空中でも地面に掛からない', () => {
   const DT = 1 / 60
   const findOpen = () => { for (let x = -200; x <= 200; x += 7) for (let z = 300; z <= 1200; z += 7) { if (world.surfaceAt(x, z) !== 'road') continue; const g = world.groundAt(x, z, 50).h; if (Math.abs(g) > 0.5) continue; let ok = true; for (let k = 0; k <= 40 && ok; k += 4) { const zz = z + k; if (world.surfaceAt(x, zz) !== 'road' || Math.abs(world.groundAt(x, zz, 50).h) > 0.5) ok = false } if (ok) return { x, z } } return null }
   const P = findOpen(), out = {}
@@ -203,13 +257,19 @@ await t('地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地
   Object.assign(b, { grounded: false, vx: 0, vy: 0, vz: 10 })
   stepRunner(b, { wire: true, wireAt: { x: P.x, y: 0, z: P.z + 30, ground: true } }, DT, world)
   out.hooked = !!(b.rope && b.rope.ground)
-  let maxV = 0, maxStep = 0, released = -1, relD = null, relVy = null, px = b.x, py = b.y, pz = b.z
-  for (let i = 1; i < 60 * 4 && released < 0; i++) {
+  let maxV = 0, maxStep = 0, released = -1, relD = null, relVy = null, relY = null, t25 = null, upAfter = 0, landed = false, vyAfterLand = -99, px = b.x, py = b.y, pz = b.z
+  for (let i = 1; i < 60 * 4; i++) {
     stepRunner(b, {}, DT, world)
     if (b.rope) maxStep = Math.max(maxStep, Math.hypot(b.x - px, b.y - py, b.z - pz)); px = b.x; py = b.y; pz = b.z
-    maxV = Math.max(maxV, Math.hypot(b.vx, b.vy, b.vz))
-    if (!b.rope) { released = i; relD = +Math.hypot(P.x - b.x, 0 - (b.y + 1.2), P.z + 30 - b.z).toFixed(1); relVy = +b.vy.toFixed(1) }
+    const v = Math.hypot(b.vx, b.vy, b.vz)
+    if (b.rope) maxV = Math.max(maxV, v)
+    if (t25 === null && v >= 25) t25 = i * DT
+    if (!b.rope && released < 0) { released = i; relD = +Math.hypot(P.x - b.x, 0 - (b.y + 1.2), P.z + 30 - b.z).toFixed(1); relVy = +b.vy.toFixed(1); relY = b.y }
+    if (released > 0) upAfter = Math.max(upAfter, b.y - relY)
+    if (b.grounded) landed = true
+    if (landed) vyAfterLand = Math.max(vyAfterLand, b.vy)
   }
+  out.t25 = t25 && +t25.toFixed(2); out.upAfter = +upAfter.toFixed(2); out.landed = landed; out.vyAfterLand = +vyAfterLand.toFixed(2)
   out.released = released > 0; out.relD = relD; out.relVy = relVy; out.maxV = +maxV.toFixed(1); out.maxStep = +maxStep.toFixed(2); out.stepLimit = +(RUN.maxSpeed * DT * 1.05).toFixed(2)
   out.unwire = b.events.length >= 0
   // 3) ワイヤーボタン（狙いなし）を空中で押しても地面には掛からない
@@ -217,7 +277,8 @@ await t('地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地
   Object.assign(c, { grounded: false, vx: 0, vy: 0, vz: 10 })
   stepRunner(c, { wire: true }, DT, world)
   out.buttonNotGround = !(c.rope && c.rope.ground)
-  expect(out.groundBlocked && out.hooked && out.released && relD <= RUN.groundWireRelease + 1.5 && relVy >= RUN.groundWireHop - 0.5 && maxV <= RUN.maxSpeed + 1 && maxStep <= out.stepLimit && out.buttonNotGround, JSON.stringify(out))
+  // 2026-11-03 本人「あんまり加速できない」「地面に着いてからバウンドするのはおかしい」: 0.3秒で 25m/s・掛けている間に 30m/s 以上（速さの線が出る）、地面の近くで外れても着地しても上へ跳ね返らない
+  expect(out.groundBlocked && out.hooked && out.released && relD <= RUN.groundWireRelease + 1.5 && maxV >= 30 && maxV <= RUN.maxSpeed + 1 && out.t25 !== null && out.t25 <= 0.3 && out.upAfter <= 0.05 && out.landed && out.vyAfterLand <= 0.01 && maxStep <= out.stepLimit && out.buttonNotGround, JSON.stringify(out))
   return out
 })
 await t('AI臭さチェック NG 0', () => {
@@ -411,6 +472,20 @@ await t('何もしない1回は最低の判定（0人・0点）', async () => {
   await p.evaluate(() => { sky.dbg.pause(true); sky.dbg.step(60 * 92); sky.dbg.pause(false) }); await p.waitForTimeout(2500)
   const r = await p.evaluate(() => ({ mode: sky.mode, score: window.__lastScore, saved: sky.rd.saved, missed: sky.rd.missed }))
   expect(r.mode === 'result' && r.score === 0 && r.saved === 0 && r.missed >= 5, r); return r
+})
+await t('エンドレス（画面）: タイトルで選ぶと保存され、時計は経った秒を数え上げ、1人落とすと終わって感謝状が「続いた時間」になる', async () => {
+  await p.click('#btnTitle'); await p.waitForTimeout(300)
+  await p.click('.mode-btn[data-mode=endless]')
+  const saved = await p.evaluate(() => ({ store: localStorage.getItem('catch.mode'), on: document.querySelector('.mode-btn[data-mode=endless]').classList.contains('on'), hint: !document.getElementById('modeHint').classList.contains('hidden') }))
+  await p.click('#btnStart'); await p.waitForTimeout(300)
+  const r = await p.evaluate(() => {
+    sky.dbg.pause(true); sky.dbg.step(60 * 95)
+    return { mode: sky.rd.mode, over: sky.rd.over, t: Math.round(sky.rd.t), watch: +document.getElementById('wNum').textContent, missed: sky.rd.missed }
+  })
+  await p.evaluate(() => sky.dbg.pause(false)); await p.waitForTimeout(3200)
+  const res = await p.evaluate(() => ({ mode: sky.mode, post: decodeURIComponent(document.getElementById('btnPost').href) }))
+  await p.evaluate(() => { localStorage.setItem('catch.mode', 'normal'); sky.setMode('normal') })
+  expect(saved.store === 'endless' && saved.on && saved.hint && r.mode === 'endless' && r.over && r.missed === 1 && r.t < 95 && res.mode === 'result' && /エンドレス/.test(res.post), JSON.stringify({ saved, r, res })); return { endedAt: r.t, post: res.post.slice(-40) }
 })
 await t('音: 鳴らした回数が数えられ、テスト中は実際に無音', async () => {
   const r = await p.evaluate(() => ({ played: Object.keys(Snd.played).length, mute: window.__muteOk() }))

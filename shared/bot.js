@@ -3,8 +3,8 @@
 //   clumsy:  skilled と同じだが、気づくのが遅く・向きがぶれ・ワイヤーの離し方が雑（初めての人の想定）
 //   walker:  ワイヤーを使わず、走って壁を登る（手抜き）
 //   idle:    何もしない
-import { CATCH, urgent, nearestMat } from './catch.js?v=8'
-import { findAnchor, RUN } from './runner.js?v=8'
+import { CATCH, urgent, nearestMat } from './catch.js?v=9'
+import { findAnchor, RUN } from './runner.js?v=9'
 
 const K = 130 / 80
 const XS = [-320, -240, -160, -80, 0, 80, 160, 240, 320].map(x => x * K)
@@ -33,7 +33,8 @@ export function botInput(b, r, rd, world, dt) {
   const clumsy = b.kind === 'clumsy'
   // 何を目指すか: 急ぐ人がいて、まだ抱えられるならその人。いなければ（か満員なら）救護マット
   // 2人抱えたら（終わり間際は1人でも）先にマットへ
-  const goDeliver = rd.carry.length >= 2 || (rd.carry.length >= 1 && rd.t > CATCH.roundSec - 15)
+  // エンドレス: 落とすと終わりなので、急ぐ人がいる間は抱えたままでも受けとめに行く（満員か誰もいない時だけマットへ）
+  const goDeliver = rd.mode === 'endless' ? (rd.carry.length >= CATCH.carryMax || (rd.carry.length >= 1 && !urgent(rd))) : rd.carry.length >= 2 || (rd.carry.length >= 1 && rd.t > CATCH.roundSec - 15)
   let f = rd.carry.length < CATCH.carryMax && !goDeliver ? urgent(rd) : null
   if (f && b.tgt !== f.id) { b.tgt = f.id; b.seen = 0 }
   b.seen += dt

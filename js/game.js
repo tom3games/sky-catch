@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=8'
-import { createWorld } from '../shared/track.js?v=8'
-import { buildScene } from './scene.js?v=8'
-import { FX } from './fx.js?v=8'
-import { loadSky, setAniso } from './look.js?v=8'
-import { Q } from './quality.js?v=8'
-import { RunnerModel } from './runnermodel.js?v=8'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=8'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=8'
-import { CATCH, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime } from '../shared/catch.js?v=8'
-import { createBot, botInput } from '../shared/bot.js?v=8'
-import { drawCertificate } from './certificate.js?v=8'
+import { GAME } from '../shared/config.js?v=9'
+import { createWorld } from '../shared/track.js?v=9'
+import { buildScene } from './scene.js?v=9'
+import { FX } from './fx.js?v=9'
+import { loadSky, setAniso } from './look.js?v=9'
+import { Q } from './quality.js?v=9'
+import { RunnerModel } from './runnermodel.js?v=9'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=9'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=9'
+import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=9'
+import { createBot, botInput } from '../shared/bot.js?v=9'
+import { drawCertificate } from './certificate.js?v=9'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
@@ -62,6 +62,10 @@ const T = {
     caught: (h, sw, g) => g ? '地面でキャッチ' : sw ? `スイングキャッチ！ 地上${h}m` : `キャッチ！ 地上${h}m`,
     saveMsg: (n, p) => `${n}人引き渡した +${p}点`, missTag: '受けとめそこねた',
     timeUp: '交代の時間',
+    modeNormal: '通常 90秒', modeEndless: 'エンドレス', modeHint: '1人でも落としたら終わり',
+    gameOver: '落としてしもた…', endlessTime: s => `${s}秒`,
+    bodyEndless: (s, sec, k) => `あなたは${sec}秒のあいだ、1人も落とさずに${s}名${k ? `（${k}）` : ''}を受けとめ続けました。最後の1人は惜しくも地面へ。その粘りと腕前をたたえ、ここに感謝の意を表します。`,
+    postEndless: (n, sec) => `空中キャッチのエンドレスで${sec}秒・${n}人受けとめた`,
     chief: '町内会長　宙野 守', again: 'もう一回', save: '画像を保存', post: 'Xでポスト', toTitle: 'タイトル',
     body: (s, m) => s ? `あなたは本日、ベランダから落ちてきた${s + m}名のうち${s}名を空中で受けとめ、救護マットまで運びました。その勇気と腕前をたたえ、ここに感謝の意を表します。` : `あなたは本日、街の上空を飛び回りました。落ちてきた${m}名は、植え込みと段ボールに助けられました。次はぜひ受けとめてください。`,
     ranks: ['見習い', '一人前', '名人', '空の\n守り神'],
@@ -90,12 +94,17 @@ const T = {
     caught: (h, sw, g) => g ? 'Ground catch' : sw ? `Swing catch! ${h}m up` : `Caught! ${h}m up`,
     saveMsg: (n, p) => `Handed over ${n} +${p}`, missTag: 'Missed',
     timeUp: 'Shift over',
+    modeNormal: 'Normal 90s', modeEndless: 'Endless', modeHint: 'One miss and it is over',
+    gameOver: 'Dropped one...', endlessTime: s => `${s}s`,
+    bodyEndless: (s, sec, k) => `For ${sec} seconds you kept catching without a single drop, ${s} saved${k ? ` (${k})` : ''}. The last one hit the ground. We thank you for your grit and skill.`,
+    postEndless: (n, sec) => `Sky Catch endless: ${sec}s, ${n} caught`,
     chief: 'Neighborhood Chief', again: 'Again', save: 'Save image', post: 'Post on X', toTitle: 'Title',
     body: (s, m) => s ? `Today you caught ${s} of the ${s + m} people who fell from balconies, in mid-air, and carried them to the rescue mats. We thank you for your courage and skill.` : `Today you flew all over town. The ${m} people who fell were saved by hedges and cardboard boxes. Please catch them next time.`,
     ranks: ['ROOKIE', 'PRO', 'MASTER', 'SKY\nGUARDIAN'],
     postText: (n, s) => `I caught ${n} falling people in Sky Catch and scored ${s}`
   }
 }
+let gameMode = store.get('catch.mode') === 'endless' ? 'endless' : 'normal'   // 通常 / エンドレス（2026-11-03 本人「誰かを落としてしまうまでエンドレスでできるモード」）
 let lang = store.get('catch.lang') || ((navigator.language || 'ja').startsWith('ja') ? 'ja' : 'en')
 const t = k => T[lang][k]
 const L2 = pair => pair[lang === 'ja' ? 0 : 1]
@@ -113,7 +122,7 @@ Snd.def({
   wire: ['snd/swish-1.mp3', 'snd/swish-2.mp3', 'snd/swish-3.mp3'], hook: ['snd/metalClick.mp3', 'snd/metal_02.mp3'],
   land: ['snd/footstep_01.mp3', 'snd/footstep_02.mp3'], bonk: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'],
   grunt: ['snd/grunt_01.mp3', 'snd/grunt_02.mp3', 'snd/grunt_03.mp3', 'snd/grunt_04.mp3'],
-  roll: 'snd/swish-5.mp3', whoosh: 'snd/swish-5.mp3', alert: 'snd/bong.mp3', catch: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'], save: 'snd/confirm.mp3', applause: 'snd/applause.mp3',
+  roll: 'snd/swish-5.mp3', whoosh: 'snd/swish-5.mp3', cat: ['snd/cat_mew1.mp3', 'snd/cat_mew2.mp3'], alert: 'snd/bong.mp3', catch: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'], save: 'snd/confirm.mp3', applause: 'snd/applause.mp3',
   thud: 'snd/drop.mp3', boing: 'snd/spring.mp3', pop: 'snd/plop.mp3', click: 'snd/click_001.mp3', tick: 'snd/tick_002.mp3', ding: 'snd/bell_ding1.mp3',
   win: 'snd/jingles_SAX01.mp3', meh: 'snd/jingles_SAX03.mp3', lose: 'snd/jingles_PIZZA07.mp3'
 })
@@ -192,7 +201,7 @@ const vis = new Map()
 function visOf(f) {
   let v = vis.get(f.id)
   if (!v) {
-    const p = new Faller(f.look)
+    const p = new Faller(f.look, f.kind)
     const b = makeBalcony(); b.position.set(f.x - f.nx * 0.5, f.top, f.z - f.nz * 0.5); b.rotation.y = Math.atan2(f.nx, f.nz); scene.add(b)
     // 影絵の板（人物の読み込み前だけ）
     const stand = p.ok ? null : new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.7, 4, 8), new THREE.MeshStandardMaterial({ color: 0xd06a3a }))
@@ -381,7 +390,7 @@ let hints = []
 function startRound(seed = Math.floor(Math.random() * 1e6)) {
   Snd.init(); sfx('click')
   mode = 'play'; paused = false; demo = null; photo = null; photoScore = -1; endAt = 0
-  rd = createRound(world, seed); me = spawnRunner('me', rd)
+  rd = createRound(world, seed, gameMode); me = spawnRunner('me', rd)
   clearVis(); placeMats(rd.mats); newModel()
   cam.hd = 0; cam.pitch = 0.15; cam.userT = -1e9
   show(null); $('touch').classList.toggle('hidden', !touchMode)
@@ -404,9 +413,11 @@ function updateHud(dt) {
   $('cCarry').textContent = t('carry')(rd.carry.length)
   const ch = $('chain'); ch.classList.toggle('hidden', rd.chain < 2); ch.textContent = t('chain')(rd.chain)
   // ストップウォッチ
-  const left = Math.max(0, CATCH.roundSec - rd.t), k = left / CATCH.roundSec
-  $('wNum').textContent = Math.ceil(left)
-  $('watch').classList.toggle('hurry', left <= 10)
+  // エンドレスは経った秒を数え上げる（針は1分で1周）
+  const endless = rd.mode === 'endless'
+  const left = endless ? rd.t : Math.max(0, CATCH.roundSec - rd.t), k = endless ? (rd.t % 60) / 60 || 0.001 : left / CATCH.roundSec
+  $('wNum').textContent = endless ? Math.floor(rd.t) : Math.ceil(left)
+  $('watch').classList.toggle('hurry', !endless && left <= 10)
   const a = Math.PI * 2 * k, x1 = 32 + Math.sin(a) * 25, y1 = 35 - Math.cos(a) * 25
   $('wArc').setAttribute('d', k <= 0 ? '' : k >= 0.999 ? 'M32 10 A25 25 0 1 1 31.99 10 Z' : `M32 35 L32 10 A25 25 0 ${a > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`)
   if (sayT > 0) { sayT -= dt; if (sayT <= 0) $('say').classList.add('hidden') }
@@ -423,7 +434,8 @@ function updateHud(dt) {
     const bx = Math.max(90, Math.min(innerWidth - 90, p.x)), by = Math.max(190, p.y)
     el.style.display = ''; el.style.left = bx + 'px'; el.style.top = by + 'px'
     el.classList.toggle('far', d > 45)
-    const html = f.state === 'warn' ? `<i>${t('warnTag')(Math.max(1, Math.ceil(CATCH.warn - f.t)))}・${Math.round(d)}m</i>${L2(REASONS[f.reason])}` : `<i>${t('falling')}</i>`
+    const kn = f.kind && f.kind !== 'normal' ? `<b>${L2([KINDS[f.kind].ja, KINDS[f.kind].en])}</b>` : ''
+    const html = f.state === 'warn' ? `<i>${t('warnTag')(Math.max(1, Math.ceil((f.warnT || CATCH.warn) - f.t)))}・${Math.round(d)}m</i>${kn}${L2(reasonText(f))}` : `<i>${f.kind && f.kind !== 'normal' ? L2(kindLine(f.kind, 'fall', f.id)) : t('falling')}</i>${kn}`
     if (el._h !== html) { el.innerHTML = html; el._h = html }
   }
   for (const [id, el] of bubEls) if (!seen.has(id)) { el.remove(); bubEls.delete(id) }
@@ -447,7 +459,7 @@ function updateHud(dt) {
   else {
     hb.classList.remove('hidden')
     const dy = f.y + 1 - (me.y + 1.2), hd = Math.round(Math.abs(dy)), dir = Math.abs(dy) < 2.5 ? 'same' : dy > 0 ? 'up' : 'down'
-    const sec = f.state === 'warn' ? t('warnTag')(Math.max(1, Math.ceil(CATCH.warn - f.t))) : t('fallingShort')
+    const sec = f.state === 'warn' ? t('warnTag')(Math.max(1, Math.ceil((f.warnT || CATCH.warn) - f.t))) : t('fallingShort')
     const pp = project(f.x, f.y + 1, f.z), above = !pp.behind && pp.y < 0
     const key = dir + hd + sec + above + lang
     if (hb._k !== key) {
@@ -490,7 +502,10 @@ function onCatchEvent(e) {
     sfx('catch', { vol: 0.9 }); sfx('pop', { vol: 0.6, delay: 0.05 })
     fx.addShake(e.ground ? 0.25 : e.swing ? 0.6 : 0.4); hitStop = e.ground ? 0.04 : e.swing ? 0.1 : 0.07; fovKick = e.ground ? -3 : -7; flashA = e.ground ? 0.5 : 1
     fx.debrisAt(e.x, e.y + 1, e.z, 16, 0xfff1c8, { speed: 9, up: 5, size: 0.12 })
-    say(`${t('caught')(e.h, e.swing, e.ground)}<small>${L2(LINES.thanks[e.id % LINES.thanks.length])}</small>`, 1.8)
+    say(`${t('caught')(e.h, e.swing, e.ground)}<small>${L2(kindLine(e.kind, e.spill ? 'spill' : 'thanks', e.id))}</small>`, 2)
+    if (e.kind === 'cat') sfx('cat', { vol: 0.9 })
+    else if (e.kind === 'heavy') { sfx('grunt', { vol: 0.8, rate: 0.75 }); fx.addShake(0.3) }
+    else if (e.kind === 'karakasa') sfx('boing', { vol: 0.6 })
     const sc = e.h + (e.swing ? 20 : 0)
     if (sc > photoScore) { photoScore = sc; snapNext = true }
     if (!shownMat) { shownMat = true; setTimeout(() => { if (mode === 'play' && rd && rd.carry.length) say(t('hintMat'), 2.6) }, 2000) }
@@ -501,10 +516,13 @@ function onCatchEvent(e) {
     say(t('saveMsg')(e.n, e.pts), 2)
   } else if (e.t === 'miss') {
     sfx('thud', { vol: 0.8 }); sfx('boing', { vol: 0.5, delay: 0.08 })
-    if (Math.hypot(e.x - me.x, e.z - me.z) < 80) say(`${t('missTag')}<small>${L2(LINES.oops[e.id % LINES.oops.length])}</small>`, 1.8)
+    if (Math.hypot(e.x - me.x, e.z - me.z) < 80) say(`${t('missTag')}<small>${L2(kindLine(e.kind, 'oops', e.id))}</small>`, 1.8)
+    if (e.kind === 'cat') sfx('cat', { vol: 0.7, rate: 1.1 })
     fx.debrisAt(e.x, e.y + 0.3, e.z, 10, 0xb08a5a, { speed: 4, up: 4, size: 0.12 })
   } else if (e.t === 'full') say(t('full'), 1.2)
   else if (e.t === 'timeUp') { say(t('timeUp'), 2); endAt = 1.6 }
+  else if (e.t === 'gameOver') { say(t('gameOver'), 2.2); endAt = 2.4 }
+  else if (e.t === 'fall' && e.kind === 'cat') sfx('cat', { vol: 0.6 * Math.max(0.2, 1 - Math.hypot(e.x - me.x, e.z - me.z) / 90) })
 }
 let snapNext = false
 
@@ -512,16 +530,19 @@ let snapNext = false
 function showResult() {
   mode = 'result'
   Snd.loop('wind', null); Snd.loop('bgm', null)
-  const rank = rankOf(rd.score)
-  const rows = rd.log.map(l => ({ text: L2(REASONS[l.reason]), ok: l.ok }))
+  const endless = rd.mode === 'endless', sec = Math.floor(rd.t)
+  const rank = endless ? (rd.saved >= 20 ? 3 : rd.saved >= 10 ? 2 : rd.saved >= 4 ? 1 : 0) : rankOf(rd.score)
+  const kname = k => L2([KINDS[k].ja, KINDS[k].en])
+  const rows = rd.log.map(l => ({ text: (l.kind && l.kind !== 'normal' ? `［${kname(l.kind)}］` : '') + L2(reasonText(l)), ok: l.ok }))
+  const kinds = Object.entries(rd.kinds).filter(([k]) => k !== 'normal').map(([k, n]) => `${kname(k)}${n > 1 ? '×' + n : ''}`).join(lang === 'ja' ? '・' : ', ')
   const d = {
     lang, saved: rd.saved, missed: rd.missed, chain: rd.bestChain, score: rd.score, rank, ranks: t('ranks'),
-    body: t('body')(rd.saved, rd.missed), rows, chief: t('chief'), date: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
+    body: endless ? t('bodyEndless')(rd.saved, sec, kinds) : t('body')(rd.saved, rd.missed) + (kinds ? (lang === 'ja' ? `（${kinds}）` : ` (${kinds})`) : ''), rows, endless, sec, chief: t('chief'), date: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
     photo, footer: 'tom3games.github.io/sky-catch', stampK: 1
   }
   drawCertificate($('cert'), d)
   sfx(rank >= 2 ? 'win' : rank >= 1 ? 'meh' : 'lose', { vol: 0.8 })
-  $('btnPost').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(t('postText')(rd.saved, rd.score)) + '&url=' + encodeURIComponent(URL_)
+  $('btnPost').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(endless ? t('postEndless')(rd.saved, sec) : t('postText')(rd.saved, rd.score)) + '&url=' + encodeURIComponent(URL_)
   $('touch').classList.add('hidden')
   clearVis()
   show('result')
@@ -529,6 +550,9 @@ function showResult() {
 }
 $('btnSave').onclick = () => { $('cert').toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'sky-catch.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000) }) }
 $('btnStart').onclick = () => startRound()
+const showMode = () => { for (const b of document.querySelectorAll('.mode-btn')) b.classList.toggle('on', b.dataset.mode === gameMode); $('modeHint').classList.toggle('hidden', gameMode !== 'endless') }
+for (const b of document.querySelectorAll('.mode-btn')) b.onclick = () => { gameMode = b.dataset.mode; store.set('catch.mode', gameMode); sfx('click'); showMode() }
+showMode()
 $('btnAgain').onclick = () => startRound()
 $('btnTitle').onclick = () => toTitle()
 $('btnHow').onclick = () => { Snd.init(); show('how') }
@@ -742,7 +766,7 @@ function render(dt) {
 // ---------------------------------------------------------------- 検証用の窓口
 window.sky = {
   get mode() { return mode }, beam: beam.g, headSign, PITCH_MIN, log, get hitStop() { return hitStop }, get flashA() { return flashA }, get fovKick() { return fovKick }, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
-  start: seed => startRound(seed), toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
+  start: seed => startRound(seed), setMode: m => { gameMode = m; showMode() }, get gameMode() { return gameMode }, toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
     teleport: (x, y, z, yaw) => { Object.assign(me, { x, y, z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, grounded: y < 0.1 }); if (yaw != null) me.yaw = yaw },

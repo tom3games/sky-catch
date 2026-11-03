@@ -25,6 +25,42 @@ export const CATCH = {
   hMin: 30, hMax: 62      // 落ちる人がいるベランダ・窓の高さ（16〜44 → 30〜62。2026-11-02 本人「もうちょっと高い場所から落ちてくれへんと余裕がない」）
 }
 
+// エンドレス（2026-11-03 本人「誰かを落としてしまうまでエンドレスでできるモード」）: 1人でも地面に落ちたら終わり。時間とともに間隔が詰まり、同時に落ちる人数が増える
+export const ENDLESS = {
+  gap: [2.6, 0.9], gapK: 0.016,      // 片付いてから次まで: 2.6秒から 1秒に 0.016 秒ずつ詰まる（最短 0.9）
+  active: [[0, 1], [30, 2], [75, 3], [140, 4]],   // [秒, 同時の上限]。最初の30秒は1人ずつ
+  warn: [7.5, 4.5], warnK: 0.015,    // ぐらつく時間: 最初は 7.5秒（余裕）から少しずつ短く
+  near: [45, 0.3],                   // 次の人が出る距離の上限: 最初は 45m 以内、1秒ごとに 0.3m 広がる（80m まで）
+  easyUntil: 30                      // 最初の30秒は落ち方の速い種類（猫・ふくよかな人）を出さない
+}
+
+// 落ちてくる人の種類（2026-11-03 本人「もっと色んな人が。猫とか妖怪とか、結構太ってる人（キャッチすると動きが鈍る）とか」）
+// fallG/fallMax: 落ち方。catchK: 受けとめ範囲の倍率。pts: 点（空中・連続の上乗せは別）。load: 抱えている間の重さ（動きが鈍る割合）
+// sway: 左右に揺れる幅（m）。hop: 傘でふわっと浮く間隔（秒）。w: 出やすさ
+export const KINDS = {
+  normal: { w: 38, fallG: 5, fallMax: 6.5, catchK: 1, pts: 100, load: 0, ja: '住人', en: 'Resident' },
+  cat: { w: 10, fallG: 6.5, fallMax: 8, catchK: 0.68, pts: 130, load: 0, spin: true, ja: '猫', en: 'Cat' },
+  heavy: { w: 9, fallG: 6, fallMax: 7.6, catchK: 1.2, pts: 170, load: 0.32, ja: 'ふくよかな人', en: 'Big guy' },
+  salary: { w: 8, fallG: 3.5, fallMax: 4.4, catchK: 0.9, pts: 90, load: 0, umbrella: true, ja: '傘のサラリーマン', en: 'Umbrella salaryman' },
+  selfie: { w: 8, fallG: 5, fallMax: 6.5, catchK: 1, pts: 110, load: 0, ja: '自撮りの人', en: 'Selfie taker' },
+  ittan: { w: 6, fallG: 2, fallMax: 3.6, catchK: 0.9, pts: 140, load: 0, sway: 3.2, ja: '一反木綿', en: 'Ittan-momen' },
+  kappa: { w: 6, fallG: 5, fallMax: 6.5, catchK: 1, pts: 140, load: 0.08, ja: '河童', en: 'Kappa' },
+  karakasa: { w: 6, fallG: 4, fallMax: 5.2, catchK: 0.9, pts: 140, load: 0, hop: 1.5, ja: 'から傘おばけ', en: 'Umbrella spirit' },
+  thrill: { w: 3, fallG: 5.5, fallMax: 7, catchK: 1, pts: 60, load: 0, ja: '落ちるのが好きな人', en: 'Thrill seeker' }
+}
+export const KIND_KEYS = Object.keys(KINDS)
+// 種類ごとの落ちる理由・受けとめた時・落とした時・落ちる時の一言（[日本語, English]）
+export const KIND_LINES = {
+  cat: { why: [['鳩を追いかけて', 'Chased a pigeon'], ['ベランダの手すりで昼寝してた', 'Napping on the railing'], ['蝶々に手を出した', 'Swatted at a butterfly']], thanks: [['ニャッ（飼い主のおばあちゃんが泣いて喜んでる）', 'Mrrp. (Grandma is crying with joy)'], ['ニャー（ひっかかれた）', 'Mew. (You got scratched)']], oops: [['ニャッ（くるっと回って着地した）', 'Mrrp. (Landed on its feet)'], ['（何事もなかった顔で毛づくろい）', '(Grooming like nothing happened)']], fall: [['ニャーッ', 'Nyaaa!'], ['フシャー', 'Hsss!']] },
+  heavy: { why: [['手すりにもたれたら手すりが負けた', 'The railing lost'], ['ベランダでスクワット', 'Squats on the balcony'], ['布団を干そうとして布団ごと', 'Went with the futon']], thanks: [['すまんのう、重いやろ', 'Sorry, I know I am heavy'], ['ダイエットは明日からや', 'Diet starts tomorrow']], oops: [['地面がへこんだだけや、平気平気', 'Just dented the ground. I am fine'], ['おなかで弾んだ', 'Bounced off my belly']], fall: [['うおおお', 'Whoooa'], ['腹から落ちる！', 'Belly first!']] },
+  salary: { why: [['傘を開いたら風につかまった', 'Opened my umbrella, the wind took it'], ['取引先に電話しながら', 'On a call with a client']], thanks: [['恐縮です。名刺をどうぞ', 'Much obliged. My card'], ['定時に間に合います', 'I will make it home on time']], oops: [['傘のおかげでふんわり着地', 'The umbrella saved me'], ['（スーツの汚れを払っている）', '(Dusting off the suit)']], fall: [['お先に失礼します', 'Excuse me, going down'], ['ふわ〜', 'Floaty...']] },
+  selfie: { why: [['屋上で自撮りしてたら一歩下がりすぎた', 'Stepped back for a selfie'], ['映える角度を探して', 'Looking for a good angle']], thanks: [['今の撮れた！ ありがと', 'Got it on video! Thanks'], ['一緒に撮ってええ？', 'Selfie with me?']], oops: [['撮れ高はあった', 'Great footage though'], ['スマホは無事', 'The phone is fine']], fall: [['ライブ配信中です！', 'I am live!'], ['いいね押して！', 'Smash that like!']] },
+  ittan: { why: [['風に乗りすぎた', 'Rode the wind too far'], ['洗濯物にまぎれて干されていた', 'Got hung out with the laundry']], thanks: [['ひらり。礼を言う', 'Flutter. Thank you'], ['布団と間違えんといて', 'I am not a futon']], oops: [['ひらひら…地面も悪くない', 'Flutter... the ground is fine'], ['電線にひっかかるよりまし', 'Better than the power line']], fall: [['ひら〜り', 'Flutter...'], ['風よ〜', 'Oh wind...']] },
+  kappa: { why: [['屋上の貯水槽で泳いでた', 'Swimming in the roof tank'], ['きゅうりを取ろうとして', 'Reaching for a cucumber']], thanks: [['皿の水、無事や。かたじけない', 'My plate is still wet. Thanks'], ['きゅうりを一本やろう', 'Have a cucumber']], spill: [['皿の水こぼれた！ 乱暴やな', 'You spilled my plate! Rough!']], oops: [['皿が乾く〜', 'My plate is drying!'], ['尻子玉は取らんといたる', 'I will spare you this time']], fall: [['皿が〜', 'My plate!'], ['キュウッ', 'Kyuu!']] },
+  karakasa: { why: [['雨やと思って飛び出した', 'Thought it was raining'], ['一本足で跳ねすぎた', 'Hopped one hop too far']], thanks: [['ベロ〜ン（なめられた）', 'Bleeeh (it licked you)'], ['百年使うてや', 'Use me for a hundred years']], oops: [['ぴょん。平気や', 'Boing. All good'], ['骨が一本ゆるんだ', 'One rib got loose']], fall: [['ばさっ', 'Fwump'], ['ぴょ〜ん', 'Boooing']] },
+  thrill: { why: [['わざと飛んだ', 'Jumped on purpose'], ['バンジーのひもを忘れた', 'Forgot the bungee cord']], thanks: [['えー、今ええとこやったのに', 'Aw, it was getting good'], ['もう一回落としてくれへん？', 'Can you drop me again?']], oops: [['最高やった！', 'That was awesome!'], ['もう一回！', 'Again!']], fall: [['ひゃっほー！', 'Wheee!'], ['最高〜！', 'Yesss!']] }
+}
+
 // 落ちる理由（毎回ちがう一言）。全部うっかり。誰もけがをしない
 export const REASONS = [
   ['布団をたたいてたら布団ごと', 'Beat the futon, went with it'],
@@ -68,10 +104,10 @@ export function makeMats(world) {
 }
 
 // 次の人を置く建物を探す。自分から nearMin〜nearMax、道に面したふち
-function pickSpot(world, r, rnd, others) {
+function pickSpot(world, r, rnd, others, nearMax = CATCH.nearMax) {
   const blds = world._catchBlds || (world._catchBlds = world.colliders.filter(o => o.kind === 'building' && o.y1 >= CATCH.hMin + 4))
   for (let g = 0; g < 1200; g++) {
-    const far = g < 400 ? CATCH.nearMax : g < 800 ? CATCH.nearMax * 1.6 : CATCH.nearMax * 2.5   // 近くに高い建物が無い時は遠くまで探す
+    const far = g < 400 ? nearMax : g < 800 ? nearMax * 1.6 : nearMax * 2.5   // 近くに高い建物が無い時は遠くまで探す
     const o = blds[Math.floor(rnd() * blds.length)]
     if (o.yaw) continue
     const side = Math.floor(rnd() * 4)
@@ -90,9 +126,9 @@ function pickSpot(world, r, rnd, others) {
   return null
 }
 
-export function createRound(world, seed = 1) {
+export function createRound(world, seed = 1, mode = 'normal') {
   return {
-    t: 0, over: false, seed, rnd: mulberry(seed), next: CATCH.firstAt, n: 0,
+    mode, t: 0, over: false, seed, kinds: {}, rnd: mulberry(seed), next: CATCH.firstAt, n: 0,
     fallers: [], carry: [], saved: 0, missed: 0, chain: 0, bestChain: 0, score: 0, swingCatches: 0,
     mats: makeMats(world), log: [], events: [], fullT: 0
   }
@@ -100,36 +136,55 @@ export function createRound(world, seed = 1) {
 
 // 落ちてくる人: state = warn（ベランダのふちでぐらつく）→ fall（落ちている）→ carried（抱えられている）/ landed（地面に落ちた）/ saved
 function spawn(rd, world, r) {
-  const sp = pickSpot(world, r, rd.rnd, rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall'))
+  const sp = pickSpot(world, r, rd.rnd, rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall'), rd.mode === 'endless' ? Math.min(CATCH.nearMax, ENDLESS.near[0] + rd.t * ENDLESS.near[1]) : CATCH.nearMax)
   if (!sp) return false
-  const reason = Math.floor(rd.rnd() * REASONS.length)
+  const kind = pickKind(rd), K = KINDS[kind], KL = KIND_LINES[kind]
+  const reason = Math.floor(rd.rnd() * (KL ? KL.why.length : REASONS.length))
   const f = {
-    id: rd.n++, state: 'warn', t: 0, look: rd.n % 6, reason,
+    id: rd.n++, state: 'warn', t: 0, look: rd.n % 6, reason, kind, ph: rd.rnd() * 6,
+    warnT: rd.mode === 'endless' ? Math.max(ENDLESS.warn[1], ENDLESS.warn[0] - rd.t * ENDLESS.warnK) : CATCH.warn,
     x: sp.ex + sp.nx * 0.5, z: sp.ez + sp.nz * 0.5, y: sp.top,      // 待っている間はベランダ（壁から出た小さな床）に立つ
     fx: sp.ex + sp.nx * 1.3, fz: sp.ez + sp.nz * 1.3, top: sp.top, roof: sp.roof,  // 落ちる位置は壁の外 1.3m
     nx: sp.nx, nz: sp.nz, vy: 0, ground: world.groundAt(sp.ex + sp.nx * 1.3, sp.ez + sp.nz * 1.3).h
   }
   rd.fallers.push(f)
-  rd.events.push({ t: 'spawn', id: f.id, reason, x: f.x, y: f.y, z: f.z })
+  rd.events.push({ t: 'spawn', id: f.id, reason, kind, x: f.x, y: f.y, z: f.z })
   return true
 }
+// 種類を選ぶ: 最初の2人は普通の住人（遊び方を覚える間）、それ以降は出やすさの重みで
+function pickKind(rd) {
+  if (rd.n < 2) return 'normal'
+  const easy = rd.mode === 'endless' && rd.t < ENDLESS.easyUntil
+  const ks = KIND_KEYS.filter(k => !(easy && (k === 'cat' || k === 'heavy')))
+  let tot = 0; for (const k of ks) tot += KINDS[k].w
+  let x = rd.rnd() * tot
+  for (const k of ks) { x -= KINDS[k].w; if (x < 0) return k }
+  return 'normal'
+}
+export const reasonText = f => { const KL = KIND_LINES[f.kind]; return KL ? KL.why[f.reason % KL.why.length] : REASONS[f.reason % REASONS.length] }
+export const kindLine = (kind, key, id) => { const KL = KIND_LINES[kind]; const arr = (KL && KL[key]) || LINES[key] || LINES.thanks; return arr[id % arr.length] }
 
 const chest = r => r.y + 1.2
-const gapNow = rd => { const k = Math.min(1, rd.t / CATCH.roundSec); return CATCH.gap[0] + (CATCH.gap[1] - CATCH.gap[0]) * k }
+const gapNow = rd => {
+  if (rd.mode === 'endless') return Math.max(ENDLESS.gap[1], ENDLESS.gap[0] - rd.t * ENDLESS.gapK)
+  const k = Math.min(1, rd.t / CATCH.roundSec); return CATCH.gap[0] + (CATCH.gap[1] - CATCH.gap[0]) * k
+}
+export const endlessMax = t => { let m = 1; for (const [at, n] of ENDLESS.active) if (t >= at) m = n; return m }
 
 // 1ステップ
 export function stepCatch(rd, r, dt, world) {
   if (rd.over) return
   rd.t += dt
-  if (rd.t >= CATCH.roundSec) { rd.over = true; rd.events.push({ t: 'timeUp' }); return }
+  if (rd.mode !== 'endless' && rd.t >= CATCH.roundSec) { rd.over = true; rd.events.push({ t: 'timeUp' }); return }
   // 次の人
   const busy = rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall').length
-  const maxA = rd.t >= CATCH.pairAfter && rd.pair ? 2 : CATCH.maxActive
+  const maxA = rd.mode === 'endless' ? endlessMax(rd.t) : rd.t >= CATCH.pairAfter && rd.pair ? 2 : CATCH.maxActive
   if (busy >= maxA) rd.next = Math.max(rd.next, rd.t + gapNow(rd))   // 落ちている人がいる間は次を出さない。片付いてから gap 秒
   else if (rd.t >= rd.next) {
     if (spawn(rd, world, r)) {
       // 後半はときどき、すぐもう1人（2人同時）
-      if (!rd.pair && busy === 0 && rd.t >= CATCH.pairAfter && rd.rnd() < CATCH.pairOdds) { rd.pair = true; rd.next = rd.t + 0.8 }
+      if (rd.mode === 'endless') rd.next = rd.t + (busy + 1 < maxA ? 1.2 : gapNow(rd))   // 同時の上限までは少しずつずらして出す
+      else if (!rd.pair && busy === 0 && rd.t >= CATCH.pairAfter && rd.rnd() < CATCH.pairOdds) { rd.pair = true; rd.next = rd.t + 0.8 }
       else { rd.pair = false; rd.next = rd.t + gapNow(rd) }
     }
     else rd.next = rd.t + 0.5
@@ -138,36 +193,43 @@ export function stepCatch(rd, r, dt, world) {
   for (const f of rd.fallers) {
     f.t += dt
     if (f.state === 'warn') {
-      if (f.t >= CATCH.warn) { f.state = 'fall'; f.t = 0; f.x = f.fx; f.z = f.fz; f.vy = 1.5; rd.events.push({ t: 'fall', id: f.id, x: f.x, y: f.y, z: f.z }) }
+      if (f.t >= (f.warnT || CATCH.warn)) { f.state = 'fall'; f.t = 0; f.x = f.fx; f.z = f.fz; f.vy = 1.5; rd.events.push({ t: 'fall', id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z }) }
     } else if (f.state === 'fall') {
-      f.vy = Math.max(-CATCH.fallMax, f.vy - CATCH.fallG * dt)
+      const K = KINDS[f.kind] || KINDS.normal
+      f.vy = Math.max(-K.fallMax, f.vy - K.fallG * dt)
+      if (K.hop && f.t % K.hop < dt && f.t > 0.5) f.vy = Math.max(f.vy, 1.6)   // から傘おばけ: 傘でふわっと浮く
       f.y += f.vy * dt
+      if (K.sway) { const sw = Math.sin(f.t * 1.3 + f.ph) * K.sway; f.x = f.fx + f.nz * sw; f.z = f.fz - f.nx * sw }   // 一反木綿: 左右にひらひら
       const dh = Math.hypot(f.x - r.x, f.z - r.z), dv = f.y + 0.8 - chest(r)
       // 手を伸ばす: 空中で近くにいれば、少しだけ人の方へ寄る（ぴったり合わせなくても受けとめられる）
       if (air && !r.climbing && rd.carry.length < CATCH.carryMax && dh < CATCH.assistR && Math.abs(dv) < CATCH.assistR) {
         const L = Math.hypot(f.x - r.x, dv, f.z - r.z) || 1, a = CATCH.assistA * dt
         r.vx += (f.x - r.x) / L * a; r.vz += (f.z - r.z) / L * a; r.vy += dv / L * a * 0.6
       }
-      if (dh < CATCH.catchR && Math.abs(dv) < CATCH.catchV) {   // 空中でも地面でも（地面は点が少ない）
+      if (dh < CATCH.catchR * K.catchK && Math.abs(dv) < CATCH.catchV * K.catchK) {   // 空中でも地面でも（地面は点が少ない）。猫は小さい
         if (rd.carry.length >= CATCH.carryMax) { if (rd.fullT <= 0) { rd.fullT = 1.5; rd.events.push({ t: 'full' }) } }
         else {
           f.state = 'carried'; f.slot = rd.carry.length; rd.carry.push(f); rd.caught = (rd.caught || 0) + 1
           const swing = !!r.rope
           if (swing) rd.swingCatches++
           f.swing = swing; f.catchY = Math.round(f.y - f.ground); f.onGround = !air
-          rd.events.push({ t: 'catch', id: f.id, swing, h: f.catchY, n: rd.carry.length, x: f.x, y: f.y, z: f.z, ground: !air })
+          f.spill = f.kind === 'kappa' && Math.hypot(r.vx, r.vy, r.vz) > 20   // 河童: 速すぎると頭の皿の水がこぼれて怒る（点が半分）
+          rd.events.push({ t: 'catch', id: f.id, kind: f.kind, spill: f.spill, swing, h: f.catchY, n: rd.carry.length, x: f.x, y: f.y, z: f.z, ground: !air })
           continue
         }
       }
       if (f.y <= f.ground) {
         f.y = f.ground; f.state = 'landed'; f.t = 0
         rd.missed++; rd.chain = 0
-        rd.log.push({ id: f.id, reason: f.reason, ok: false })
-        rd.events.push({ t: 'miss', id: f.id, x: f.x, y: f.y, z: f.z })
+        rd.log.push({ id: f.id, reason: f.reason, kind: f.kind, ok: false })
+        rd.events.push({ t: 'miss', id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z })
+        if (rd.mode === 'endless') { rd.over = true; rd.lost = f.kind; rd.events.push({ t: 'gameOver', id: f.id, kind: f.kind }); return }   // エンドレスは1人落ちたら終わり
       }
     }
   }
   rd.fullT -= dt
+  // 重い人を抱えている間は動きが鈍る（runner.js が r.load を読む）
+  r.load = Math.min(0.5, rd.carry.reduce((a, f) => a + ((KINDS[f.kind] || KINDS.normal).load || 0), 0))
   // 抱えている人を救護マットに引き渡す（マットの上に着地する）
   if (rd.carry.length && r.grounded) {
     const m = rd.mats.find(m => Math.hypot(m.x - r.x, m.z - r.z) < CATCH.matR)
@@ -176,14 +238,17 @@ export function stepCatch(rd, r, dt, world) {
       for (const f of rd.carry) {
         rd.saved++
         let p
-        if (f.onGround) p = CATCH.ptsGround   // 地面で受けとめた人は少なめ・連続に数えない
-        else { rd.chain++; rd.bestChain = Math.max(rd.bestChain, rd.chain); p = CATCH.ptsSave + CATCH.ptsChain * (Math.min(rd.chain, CATCH.chainMax) - 1) + (f.swing ? CATCH.ptsSwing : 0) }
+        const base = (KINDS[f.kind] || KINDS.normal).pts
+        if (f.onGround) p = Math.round(CATCH.ptsGround * base / 100)   // 地面で受けとめた人は少なめ・連続に数えない
+        else { rd.chain++; rd.bestChain = Math.max(rd.bestChain, rd.chain); p = base + CATCH.ptsChain * (Math.min(rd.chain, CATCH.chainMax) - 1) + (f.swing ? CATCH.ptsSwing : 0) }
+        if (f.spill) p = Math.round(p / 2)
+        rd.kinds[f.kind] = (rd.kinds[f.kind] || 0) + 1
         pts += p; f.state = 'saved'; f.t = 0; f.x = m.x + (f.slot - 1) * 1.1; f.z = m.z + 1.2; f.y = m.y
-        rd.log.push({ id: f.id, reason: f.reason, ok: true, swing: f.swing, ground: f.onGround, h: f.catchY, pts: p })
+        rd.log.push({ id: f.id, reason: f.reason, kind: f.kind, ok: true, swing: f.swing, ground: f.onGround, h: f.catchY, pts: p })
       }
       rd.score += pts
       rd.events.push({ t: 'save', n: rd.carry.length, pts, chain: rd.chain, mat: m })
-      rd.carry = []
+      rd.carry = []; r.load = 0
     }
   }
   // 片付け: 落ちた人・引き渡した人は少ししたら消す
@@ -195,13 +260,14 @@ export const active = rd => rd.fallers.filter(f => f.state === 'warn' || f.state
 export function urgent(rd) {
   const a = active(rd)
   if (!a.length) return null
-  const eta = f => f.state === 'warn' ? (CATCH.warn - f.t) + fallTime(f.top - f.ground) : fallTime(f.y - f.ground, f.vy)
+  const eta = f => f.state === 'warn' ? ((f.warnT || CATCH.warn) - f.t) + fallTime(f.top - f.ground, 1.5, f.kind) : fallTime(f.y - f.ground, f.vy, f.kind)
   return a.sort((p, q) => eta(p) - eta(q))[0]
 }
 // 高さ h を落ちきるまでの秒数（今の速さ vy から）
-export function fallTime(h, vy = 1.5) {
+export function fallTime(h, vy = 1.5, kind = 'normal') {
+  const K = KINDS[kind] || KINDS.normal
   let t = 0, y = h, v = vy
-  while (y > 0 && t < 30) { v = Math.max(-CATCH.fallMax, v - CATCH.fallG / 30); y += v / 30; t += 1 / 30 }
+  while (y > 0 && t < 60) { v = Math.max(-K.fallMax, v - K.fallG / 30); y += v / 30; t += 1 / 30 }
   return t
 }
 export function nearestMat(rd, x, z) { let best = null, bd = 1e9; for (const m of rd.mats) { const d = Math.hypot(m.x - x, m.z - z); if (d < bd) { bd = d; best = m } } return best }

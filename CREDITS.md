@@ -41,3 +41,5 @@
 - snd/applause.mp3（3.6秒に切り出し）: Applause in a large hall or church / eXpl0it3r / CC0
 - snd/wind_loop.wav: Howling wind / Tvabutzku1234 / CC0（Wikimedia Commons。14秒の継ぎ目なしループにした。空中で速い時の風）
 - snd/city_street_loop.wav: Sunday in the city street noise 1 / cori / Public domain（Wikimedia Commons。静かな通りの22.5秒ループ。街の環境音）
+- snd/cat_mew1.mp3: Cat purr / meow (cat_mewfood) / Kerzoven / CC0（OpenGameArt cat-purr-meow。本物の猫の録音）
+- snd/cat_mew2.mp3: Cat purr / meow (cat_mewpurr) / Kerzoven / CC0（同上）

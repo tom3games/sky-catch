@@ -36,6 +36,11 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .radio b{display:inline-block;margin-right:.6em;font-family:var(--sans);font-size:11px;padding:1px 6px;background:var(--orange);color:#fff;letter-spacing:.1em;text-shadow:none}
 .title-actions{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
 /* 主役のボタン（押せる厚みはこれだけ）。救助服の橙 */
+.mode{display:flex;gap:0;border:3px solid var(--ink);border-radius:6px;overflow:hidden;box-shadow:0 3px 0 rgba(0,0,0,.25)}
+.mode-btn{min-height:40px;padding:0 16px;font-size:15px;font-weight:700;color:var(--ink);background:var(--yel2)}
+.mode-btn.on{background:var(--yel);box-shadow:inset 0 -4px 0 var(--ink)}
+.mode-btn:not(.on){opacity:.72}
+.mode-hint{font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000}
 .go{min-width:min(300px,80vw);padding:15px 28px 13px;font-weight:700;font-size:26px;letter-spacing:.3em;color:#fff;background:var(--orange);border-radius:8px;box-shadow:0 5px 0 var(--orange2),0 9px 18px rgba(0,0,0,.3);transition:transform .08s}
 .go:active{transform:translateY(4px);box-shadow:0 1px 0 var(--orange2),0 3px 8px rgba(0,0,0,.3)}
 .go.small{font-size:20px;min-width:190px;padding:11px 22px 9px;letter-spacing:.15em}
@@ -85,6 +90,7 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .bub{position:absolute;left:0;top:0;transform:translate(-50%,-100%);width:max-content;max-width:min(240px,60vw);background:#fff;color:var(--ink);font-family:var(--hand);font-size:14px;line-height:1.35;padding:6px 10px 6px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .bub::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-7px;border:7px solid transparent;border-top-color:#fff;border-bottom:0}
 .bub i{display:block;font-style:normal;font-family:var(--sans);font-weight:700;font-size:12px;color:var(--red)}
+.bub b{display:inline-block;margin-right:4px;padding:0 5px;border-radius:4px;background:var(--ink);color:var(--yel);font-family:var(--sans);font-size:11px;font-weight:700}
 .bub.far{font-size:12px;max-width:180px}
 .say{position:absolute;left:50%;top:30%;transform:translateX(-50%);width:max-content;max-width:min(520px,calc(100% - 32px));font-family:var(--hand);font-size:20px;line-height:1.35;color:#fff;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.85),0 0 2px #000}
 .say small{display:block;font-family:var(--sans);font-weight:700;font-size:14px;color:var(--yel)}

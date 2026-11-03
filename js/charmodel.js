@@ -221,50 +221,162 @@ export class Customer {
 }
 
 // 落ちてくる人（Kenney Mini）。状態ごとに手足を動かす。抱えられている時の位置は呼ぶ側が決める
+// 落ちてくる人の種類ごとの見た目（2026-11-03 本人「猫とか妖怪とか、結構太ってる人とか」）
+// 人は Kenney Mini（CC0）に小物を足す。猫・一反木綿・から傘おばけは素材に無いので軽い自作の形（箱と球だけにしない）
+const M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 })
+function makeCat() {
+  const g = new THREE.Group(), fur = M(0xd9893a), dark = M(0x2a1d14), pale = M(0xf3e2c4)
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.34, 4, 10), fur); body.rotation.x = Math.PI / 2; body.position.y = 0.3
+  const belly = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.24, 4, 8), pale); belly.rotation.x = Math.PI / 2; belly.position.set(0, 0.24, 0.02)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), fur); head.scale.set(1.1, 0.95, 1); head.position.set(0, 0.42, 0.3)
+  for (const sx of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 4), fur); ear.position.set(sx * 0.08, 0.56, 0.29); ear.rotation.z = -sx * 0.25; g.add(ear)
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), dark); eye.position.set(sx * 0.06, 0.45, 0.43); g.add(eye)
+    for (const fz of [-0.16, 0.16]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.2, 6), fur); leg.position.set(sx * 0.09, 0.12, fz); g.add(leg) }
+  }
+  // 縞
+  for (const z of [-0.12, 0, 0.12]) { const st = new THREE.Mesh(new THREE.TorusGeometry(0.165, 0.012, 4, 14, Math.PI), M(0x9c5a20)); st.rotation.set(0, Math.PI / 2, 0); st.position.set(0, 0.3, z); g.add(st) }
+  const tail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.32, -0.3), new THREE.Vector3(0, 0.45, -0.45), new THREE.Vector3(0, 0.62, -0.4)]), 8, 0.03, 6), fur)
+  g.add(body, belly, head, tail)
+  g.traverse(o => { if (o.isMesh) o.castShadow = true })
+  return g
+}
+function makeIttan() {
+  // 一反木綿: 長い白い布。縦の帯を波打たせる（頂点を動かす）。上の方に目
+  const geo = new THREE.PlaneGeometry(0.55, 3.0, 1, 18); geo.translate(0, 1.5, 0)
+  const cloth = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xf4f1e8, roughness: 0.95, side: THREE.DoubleSide }))
+  cloth.castShadow = true
+  const g = new THREE.Group(); g.add(cloth)
+  for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide })); e.position.set(sx * 0.1, 2.75, 0.02); e.userData.eye = true; g.add(e) }
+  g.userData.cloth = cloth; g.userData.base = geo.attributes.position.array.slice()
+  return g
+}
+function makeKarakasa() {
+  // から傘おばけ: 紫の番傘（骨の筋入り）に大きな一つ目と赤い舌、一本足に下駄
+  const g = new THREE.Group()
+  const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.9, 12, 1, true), new THREE.MeshStandardMaterial({ color: 0x7a3f8f, roughness: 0.7, side: THREE.DoubleSide }))
+  canopy.position.y = 1.15
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, rib = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.17, 4), M(0xe8d6a8)); rib.position.set(Math.sin(a) * 0.37, 1.15, Math.cos(a) * 0.37); rib.rotation.set(Math.cos(a) * 0.69, 0, -Math.sin(a) * 0.69); g.add(rib) }
+  const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), M(0xffffff)); eyeW.scale.z = 0.5; eyeW.position.set(0, 1.08, 0.5)
+  const eyeB = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), M(0x111111)); eyeB.position.set(0, 1.08, 0.58)
+  const tongue = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.3, 4, 8), M(0xd8343a)); tongue.position.set(0, 0.78, 0.48); tongue.rotation.x = 0.5
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), M(0xe6c49a)); leg.position.y = 0.35
+  const geta = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.32), M(0x8a5a2b)); geta.position.y = 0.0
+  g.add(canopy, eyeW, eyeB, tongue, leg, geta)
+  g.traverse(o => { if (o.isMesh) o.castShadow = true })
+  g.userData.tongue = tongue
+  return g
+}
+function makeUmbrella(color) {
+  const g = new THREE.Group()
+  const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.35, 10, 1, true), new THREE.MeshStandardMaterial({ color, roughness: 0.6, side: THREE.DoubleSide }))
+  canopy.position.y = 0.9
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.95, 5), M(0x333333)); stick.position.y = 0.45
+  g.add(canopy, stick); return g
+}
+
 export class Faller {
-  constructor(look) {
-    this.group = new THREE.Group(); this.t = Math.random() * 10; this.ok = false
+  constructor(look, kind = 'normal') {
+    this.group = new THREE.Group(); this.t = Math.random() * 10; this.ok = false; this.kind = kind
+    this.body = new THREE.Group(); this.group.add(this.body)
+    if (kind === 'cat') { this.prop = makeCat(); this.body.add(this.prop); this.ok = true; return }
+    if (kind === 'ittan') { this.prop = makeIttan(); this.body.add(this.prop); this.ok = true; return }
+    if (kind === 'karakasa') { this.prop = makeKarakasa(); this.body.add(this.prop); this.ok = true; return }
     if (!A.ready || !A.custs.length) return
     const c = A.custs[((look % A.custs.length) + A.custs.length) % A.custs.length], root = skClone(c.scene)
     const box = new THREE.Box3().setFromObject(root); const k = 1.35 / (box.max.y - box.min.y)
     root.scale.setScalar(k); root.position.y = -box.min.y * k
-    this.body = new THREE.Group(); this.body.add(root); this.group.add(this.body)
+    if (kind === 'heavy') root.scale.set(k * 1.55, k * 1.02, k * 1.5)   // ふくよか
+    this.body.add(root)
     this.mixer = new THREE.AnimationMixer(root)
     const idle = c.clips.find(a => a.name === 'idle'); if (idle) this.mixer.clipAction(idle).play()
     const b = {}; root.traverse(o => { if (o.name) b[o.name] = o; if (o.isMesh) o.castShadow = true })
+    if (kind === 'kappa') {
+      // 河童: 緑の肌に塗り替え、頭に白い皿（水が光る）
+      root.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color = new THREE.Color(0x7cc46a) } })
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.15, 0.04, 14), M(0xf2f2ee)); plate.position.y = 1.4
+      const water = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 14), new THREE.MeshStandardMaterial({ color: 0x7fc8ff, roughness: 0.1, metalness: 0.2 })); water.position.y = 1.425
+      this.body.add(plate, water); this.water = water
+    }
+    if (kind === 'salary') { this.umb = makeUmbrella(0x1d2433); this.umb.position.set(0.18, 0.9, 0); this.body.add(this.umb) }
+    if (kind === 'selfie') { const ph = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.15, 0.015), M(0x202428)); this.phone = ph; (b['arm-right'] || this.body).add(ph); ph.position.set(0, -0.35, 0.08) }
     this.b = b; this.ok = true
   }
   // st: warn | fall | carried | landed | saved
   update(st, dt) {
     if (!this.ok) return
-    this.t += dt; const t = this.t, b = this.b
+    this.t += dt; const t = this.t, kind = this.kind
+    this.body.rotation.set(0, 0, 0); this.body.position.set(0, 0, 0)
+    if (kind === 'cat') {
+      if (st === 'fall') this.body.rotation.set(t * 7, t * 3, 0)   // 空中で体をひねってくるくる
+      else if (st === 'warn') this.body.rotation.z = Math.sin(t * 6) * 0.25
+      else if (st === 'landed') this.body.rotation.x = Math.sin(t * 4) * 0.1
+      return
+    }
+    if (kind === 'ittan') {
+      const pos = this.prop.userData.cloth.geometry.attributes.position, base = this.prop.userData.base
+      const amp = st === 'fall' ? 0.35 : st === 'carried' ? 0.12 : 0.2
+      for (let i = 0; i < pos.count; i++) { const y = base[i * 3 + 1]; pos.array[i * 3 + 2] = Math.sin(y * 2.2 - t * 5) * amp * (y / 3) }
+      pos.needsUpdate = true
+      if (st === 'fall') this.body.rotation.set(0.9 + Math.sin(t * 2) * 0.3, 0, Math.sin(t * 1.3) * 0.5)   // 寝そべってひらひら
+      if (st === 'carried') { this.body.rotation.x = 1.3; this.body.position.set(0, -0.2, -0.6) }   // 肩に掛ける
+      return
+    }
+    if (kind === 'karakasa') {
+      const p = this.prop
+      if (st === 'fall') { this.body.rotation.set(Math.sin(t * 3) * 0.2, t * 1.5, Math.cos(t * 2.5) * 0.2) }
+      else if (st === 'warn') this.body.position.y = Math.abs(Math.sin(t * 6)) * 0.25   // ぴょんぴょん跳ねる
+      p.userData.tongue.rotation.x = 0.5 + Math.sin(t * 8) * 0.3
+      if (st === 'carried') this.body.scale.setScalar(0.7); else this.body.scale.setScalar(1)
+      return
+    }
+    const b = this.b
     this.mixer.update(dt)
     const aR = b['arm-right'], aL = b['arm-left'], lR = b['leg-right'], lL = b['leg-left'], hd = b['head']
-    this.body.rotation.set(0, 0, 0); this.body.position.set(0, 0, 0)
     if (st === 'warn') {
       // ふちでぐらつく: 体を前後に揺らし、両腕をぐるぐる回す
       this.body.rotation.x = Math.sin(t * 5) * 0.28
       if (aR) aR.rotation.set(t * 11, 0, 0.4); if (aL) aL.rotation.set(t * 11 + Math.PI, 0, -0.4)
+      if (kind === 'selfie' && aR) aR.rotation.set(-2.2, 0, 0.6)
+      if (kind === 'thrill') { if (aR) aR.rotation.set(-3, 0, 0.3); if (aL) aL.rotation.set(-3, 0, -0.3) }
     } else if (st === 'fall') {
-      // 落ちている: 手足をばたつかせ、ゆっくり回る
-      this.body.rotation.set(Math.sin(t * 2.2) * 0.6, t * 1.4, Math.cos(t * 1.7) * 0.4)
-      if (aR) aR.rotation.set(-2.6 + Math.sin(t * 18) * 0.7, 0, 0.3); if (aL) aL.rotation.set(-2.6 + Math.cos(t * 18) * 0.7, 0, -0.3)
-      if (lR) lR.rotation.x = Math.sin(t * 16) * 0.8; if (lL) lL.rotation.x = -Math.sin(t * 16) * 0.8
-      if (hd) hd.rotation.x = -0.4
+      if (kind === 'salary') {
+        // 傘を差してふわふわ。体はまっすぐ、少し揺れる
+        this.body.rotation.z = Math.sin(t * 2) * 0.15
+        if (aR) aR.rotation.set(-2.9, 0, 0.2); if (lR) lR.rotation.x = Math.sin(t * 3) * 0.2; if (lL) lL.rotation.x = -Math.sin(t * 3) * 0.2
+      } else if (kind === 'selfie') {
+        // 自撮りしながら落ちる: 腕を伸ばしてスマホを顔に向ける、ピース
+        this.body.rotation.set(-0.3, t * 0.6, 0)
+        if (aR) aR.rotation.set(-2.2, 0, 0.6); if (aL) aL.rotation.set(-2.8, 0, -0.4)
+      } else if (kind === 'thrill') {
+        // 楽しんでいる: 両手を上げて大の字、くるくる
+        this.body.rotation.set(-0.5, t * 2.2, 0)
+        if (aR) aR.rotation.set(-3, 0, 0.9); if (aL) aL.rotation.set(-3, 0, -0.9); if (lR) lR.rotation.z = 0.5; if (lL) lL.rotation.z = -0.5
+      } else {
+        // 落ちている: 手足をばたつかせ、ゆっくり回る（ふくよかな人はもっとゆっくり）
+        const sp = kind === 'heavy' ? 0.6 : 1
+        this.body.rotation.set(Math.sin(t * 2.2 * sp) * 0.6, t * 1.4 * sp, Math.cos(t * 1.7 * sp) * 0.4)
+        if (aR) aR.rotation.set(-2.6 + Math.sin(t * 18) * 0.7, 0, 0.3); if (aL) aL.rotation.set(-2.6 + Math.cos(t * 18) * 0.7, 0, -0.3)
+        if (lR) lR.rotation.x = Math.sin(t * 16) * 0.8; if (lL) lL.rotation.x = -Math.sin(t * 16) * 0.8
+        if (hd) hd.rotation.x = -0.4
+      }
     } else if (st === 'carried') {
-      // 抱えられている: しがみつく
-      if (aR) aR.rotation.set(-1.4, 0, 0.5); if (aL) aL.rotation.set(-1.4, 0, -0.5)
+      // 抱えられている: しがみつく（落ちるのが好きな人は腕を組んで不満そう）
+      if (kind === 'thrill') { if (aR) aR.rotation.set(-1.2, 0, -0.9); if (aL) aL.rotation.set(-1.2, 0, 0.9); if (hd) hd.rotation.y = Math.sin(t * 1.5) * 0.5 }
+      else { if (aR) aR.rotation.set(-1.4, 0, 0.5); if (aL) aL.rotation.set(-1.4, 0, -0.5) }
       if (lR) lR.rotation.x = -0.5 + Math.sin(t * 6) * 0.15; if (lL) lL.rotation.x = -0.5 - Math.sin(t * 6) * 0.15
     } else if (st === 'landed') {
-      // 地面に落ちた: しりもちをついて、おしりをさする
+      // 地面に落ちた: しりもちをついて、おしりをさする（楽しんでいる人は手を上げて喜ぶ）
       this.body.rotation.x = -0.35; this.body.position.y = -0.35
       if (lR) lR.rotation.x = -1.5; if (lL) lL.rotation.x = -1.4
-      if (aR) aR.rotation.set(0.6 + Math.sin(t * 7) * 0.3, 0, 0.2); if (aL) aL.rotation.set(0, 0, -0.2)
+      if (kind === 'thrill') { if (aR) aR.rotation.set(-3 + Math.sin(t * 9) * 0.3, 0, 0.4); if (aL) aL.rotation.set(-3, 0, -0.4) }
+      else { if (aR) aR.rotation.set(0.6 + Math.sin(t * 7) * 0.3, 0, 0.2); if (aL) aL.rotation.set(0, 0, -0.2) }
       if (hd) hd.rotation.z = Math.sin(t * 3) * 0.15
     } else if (st === 'saved') {
       // 引き渡した: 手を振ってお礼
       if (aR) aR.rotation.set(-2.75 + Math.sin(t * 9) * 0.35, 0, 0)
       if (hd) hd.rotation.z = Math.sin(t * 2.3) * 0.08
     }
+    if (this.umb) this.umb.visible = st !== 'carried'
   }
 }
