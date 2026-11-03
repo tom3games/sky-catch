@@ -115,8 +115,9 @@ button,a{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touc
 .corner-btn{position:absolute;right:max(10px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));pointer-events:auto;font-size:13px;font-weight:700;color:#fff;background:rgba(14,18,28,.6);padding:6px 12px;border-radius:14px}
 /* スマホ操作（WIRE ESCAPE と同じ: 左スティック・画面タッチでワイヤー・右に跳ぶ） */
 .touch{position:absolute;inset:0;pointer-events:none}
-.stickzone{position:absolute;left:0;bottom:0;width:46%;height:62%;pointer-events:auto;touch-action:none}
-.stick{position:absolute;left:calc(max(16px,env(safe-area-inset-left)) + 62px);top:calc(100% - max(16px,env(safe-area-inset-bottom)) - 62px);width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(14,18,28,.28);opacity:.65;pointer-events:none}
+.stickzone{position:absolute;left:0;bottom:0;width:46%;height:62%;pointer-events:none}   /* 枠だけ。触れるのはスティックの円（左下に固定） */
+.stick{position:absolute;left:calc(max(16px,env(safe-area-inset-left)) + 62px);top:calc(100% - max(16px,env(safe-area-inset-bottom)) - 62px);width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(14,18,28,.28);opacity:.65;pointer-events:auto;touch-action:none}
+.stick::before{content:'';position:absolute;inset:-24px;border-radius:50%}   /* 円の少し外まで反応 */
 .stick.held{opacity:1}
 .stick .knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(255,255,255,.85)}
 .tbtn{position:absolute;pointer-events:auto;border-radius:50%;color:#fff;touch-action:none;display:flex;align-items:center;justify-content:center}
