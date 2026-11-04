@@ -3,8 +3,8 @@
 //   clumsy:  skilled と同じだが、気づくのが遅く・向きがぶれ・ワイヤーの離し方が雑（初めての人の想定）
 //   walker:  ワイヤーを使わず、走って壁を登る（手抜き）
 //   idle:    何もしない
-import { CATCH, urgent, nearestMat } from './catch.js?v=11'
-import { findAnchor, RUN } from './runner.js?v=11'
+import { CATCH, urgent, nearestMat } from './catch.js?v=12'
+import { findAnchor, RUN } from './runner.js?v=12'
 
 const K = 130 / 80
 const XS = [-320, -240, -160, -80, 0, 80, 160, 240, 320].map(x => x * K)

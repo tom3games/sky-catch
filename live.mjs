@@ -31,7 +31,7 @@ for (const [name, bt, opts] of [['chromium', chromium, {}], ['webkit', webkit, {
     return { caught, saved }
   })
   await p.waitForTimeout(2500)
-  const res = await p.evaluate(() => ({ mode: sky.mode, score: window.__lastScore, mute: window.__muteOk() }))
+  const res = await p.evaluate(() => ({ mode: sky.mode, score: window.__lastScore, marks: typeof sky.marks === 'function', mute: window.__muteOk() }))
   out.push(`${name}: flow=${JSON.stringify(flow)} result=${JSON.stringify(res)}`)
   await p.screenshot({ path: `shots/live-${name}.png` })
   const og = await p.evaluate(async () => { const r = await fetch(document.querySelector('meta[property="og:image"]').content); return r.status + ' ' + r.headers.get('content-type') })

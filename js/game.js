@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=11'
-import { createWorld } from '../shared/track.js?v=11'
-import { buildScene } from './scene.js?v=11'
-import { FX } from './fx.js?v=11'
-import { loadSky, setAniso } from './look.js?v=11'
-import { Q } from './quality.js?v=11'
-import { RunnerModel } from './runnermodel.js?v=11'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=11'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=11'
-import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=11'
-import { createBot, botInput } from '../shared/bot.js?v=11'
-import { drawCertificate } from './certificate.js?v=11'
+import { GAME } from '../shared/config.js?v=12'
+import { createWorld } from '../shared/track.js?v=12'
+import { buildScene } from './scene.js?v=12'
+import { FX } from './fx.js?v=12'
+import { loadSky, setAniso } from './look.js?v=12'
+import { Q } from './quality.js?v=12'
+import { RunnerModel } from './runnermodel.js?v=12'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=12'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=12'
+import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=12'
+import { createBot, botInput } from '../shared/bot.js?v=12'
+import { drawCertificate } from './certificate.js?v=12'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
@@ -217,21 +217,37 @@ const ropeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 5).r
 ropeMesh.visible = false; scene.add(ropeMesh)
 const aimMark = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.75, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false }))
 aimMark.renderOrder = 5; aimMark.visible = false; scene.add(aimMark)
-// 落ちる位置の目印（地面の赤い輪）
-const dropRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 32), new THREE.MeshBasicMaterial({ color: 0xff5a2a, transparent: true, opacity: 0.7, depthWrite: false }))
-dropRing.rotation.x = -Math.PI / 2; dropRing.visible = false; scene.add(dropRing)
 // 落ちてくる人の場所が分かる目印（2026-11-03 本人「どっから落ちてきてんのか分からへん」。空中出前の届け先の形を流用）
-// 地面からベランダの上まで伸びる光の柱（工事の黄色）と、本人の頭の上で揺れる「！」の頭上注意の看板
-const beam = (() => {
+// 2026-11-04 本人「落ちてる途中でもその場所を黄色く光らせて」: 前は急ぐ1人だけ・近づくと透明・抱えきれない時は消えていた。
+// ぐらついている人・落ちている人の全員に1組ずつ。①人を中心に光る黄色の輪（人についてくる。遠くでも画面で同じ大きさ。建物の裏でも見える）
+// ②地面から屋上の上までの光の柱（落下中は人についてくる）③地面の落下予想地点の黄色い輪。受けとめた・落ちた瞬間に消える
+const MARK_YELLOW = 0xffd21e
+const markTex = (() => {
   const c = document.createElement('canvas'); c.width = 4; c.height = 128
   const x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 0, 128)
-  g.addColorStop(0, 'rgba(255,210,60,0)'); g.addColorStop(0.12, 'rgba(255,205,50,.95)'); g.addColorStop(1, 'rgba(255,170,30,.45)')
+  g.addColorStop(0, 'rgba(255,210,30,0)'); g.addColorStop(0.12, 'rgba(255,210,30,.95)'); g.addColorStop(1, 'rgba(255,200,20,.6)')
   x.fillStyle = g; x.fillRect(0, 0, 4, 128)
-  const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false })
-  const col = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 16, 1, true).translate(0, 0.5, 0), mat); col.renderOrder = 3
-  const g2 = new THREE.Group(); g2.add(col); g2.visible = false; scene.add(g2)
-  return { g: g2, col, mat }
+  const beamT = new THREE.CanvasTexture(c); beamT.colorSpace = THREE.SRGBColorSpace
+  const h = document.createElement('canvas'); h.width = h.height = 128
+  const y = h.getContext('2d'), r = y.createRadialGradient(64, 64, 0, 64, 64, 64)
+  r.addColorStop(0, 'rgba(255,220,40,.25)'); r.addColorStop(0.45, 'rgba(255,220,40,.3)'); r.addColorStop(0.62, 'rgba(255,214,30,1)'); r.addColorStop(0.74, 'rgba(255,214,30,.75)'); r.addColorStop(1, 'rgba(255,214,30,0)')
+  y.fillStyle = r; y.fillRect(0, 0, 128, 128)
+  const haloT = new THREE.CanvasTexture(h); haloT.colorSpace = THREE.SRGBColorSpace
+  return { beamT, haloT }
 })()
+const ringGeo = new THREE.RingGeometry(1.15, 1.75, 32), beamGeo = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true).translate(0, 0.5, 0)
+const markPool = []
+function markAt(i) {
+  if (markPool[i]) return markPool[i]
+  const mat = new THREE.MeshBasicMaterial({ map: markTex.beamT, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false })
+  const col = new THREE.Mesh(beamGeo, mat); col.renderOrder = 3
+  const g = new THREE.Group(); g.add(col); g.visible = false; scene.add(g)
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: markTex.haloT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }))
+  halo.renderOrder = 5; halo.visible = false; scene.add(halo)
+  const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: MARK_YELLOW, transparent: true, opacity: 0.85, depthWrite: false, fog: false, toneMapped: false }))
+  ring.rotation.x = -Math.PI / 2; ring.visible = false; scene.add(ring)
+  return (markPool[i] = { g, col, mat, halo, ring, id: null })
+}
 const headSign = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 128
   const x = c.getContext('2d')
@@ -434,7 +450,9 @@ function updateHud(dt) {
     const d = Math.hypot(f.x - me.x, f.z - me.z)
     if (p.behind || p.x < 10 || p.x > innerWidth - 10 || p.y < 0 || p.y > innerHeight - 10) { el.style.display = 'none'; continue }
     // 左上の数取器・右上の時計に重ねない（吹き出しは下端を合わせて上へ伸びる）
-    const bx = Math.max(90, Math.min(innerWidth - 90, p.x)), by = Math.max(190, p.y)
+    // 遠くても黄色い輪を隠さない（吹き出しの先を輪の上に出す。輪の半径は画面で約35px、近いと大きい）
+    const p0 = project(f.x, f.y + 0.7, f.z), dH0 = camera.position.distanceTo(_w.set(f.x, f.y + 0.7, f.z)), ringPx = innerHeight / (1.25 * Math.max(1, dH0)) * Math.max(4.5, dH0 * 0.12) * 0.38
+    const bx = Math.max(90, Math.min(innerWidth - 90, p.x)), by = Math.max(190, Math.min(p.y, p0.y - ringPx - 12))
     el.style.display = ''; el.style.left = bx + 'px'; el.style.top = by + 'px'
     el.classList.toggle('far', d > 45)
     const kn = f.kind && f.kind !== 'normal' ? `<b>${L2([KINDS[f.kind].ja, KINDS[f.kind].en])}</b>` : ''
@@ -447,15 +465,12 @@ function updateHud(dt) {
   const m = rd.carry.length ? nearestMat(rd, me.x, me.z) : null
   const goMat = m && (!f || rd.carry.length >= CATCH.carryMax)
   const ar = $('arrow')
-  if (!f && !m) { ar.classList.add('hidden'); dropRing.visible = false; return }
+  if (!f && !m) { ar.classList.add('hidden'); return }
   const goal = goMat ? _w.set(m.x, 3, m.z) : _w.set(f.x, f.y + 1, f.z)
   ar.classList.remove('hidden'); ar.classList.toggle('mat', !!goMat)
   $('arrowD').textContent = Math.round(Math.hypot(goal.x - me.x, goal.z - me.z)) + 'm'
   // 方角だけを示す（2026-11-03 本人「矢印がすごい分かりづらい。高さを表現すると分かりづらい。方角だけでいい」）: 画面の上の真ん中に固定、水平の向きだけで回る
   ar.querySelector('svg').style.transform = `rotate(${compassAng(goal.x, goal.z)}rad)`
-  // 落ちる位置の目印
-  dropRing.visible = !goMat && !!f
-  if (f) dropRing.position.set(f.fx, f.ground + 0.06, f.fz)
   // 高さの差と残り時間（方角の矢印の下）。人が画面の上の外にいる時は「上を見て」
   const hb = $('heightBox')
   if (goMat || !f) { hb.classList.add('hidden') }
@@ -566,18 +581,29 @@ $('btnPause').onclick = () => setPause(true)
 $('btnResume').onclick = () => setPause(false)
 $('btnQuit').onclick = () => { setPause(false); toTitle() }
 
-// 落ちてくる人の光の柱と頭上の看板（急ぐ人だけ）
+// 落ちてくる人の黄色い目印（全員分）と、頭上の看板（急ぐ人だけ）
 function updateMarks() {
-  const f = rd && mode === 'play' && rd.carry.length < CATCH.carryMax ? urgent(rd) : null
-  beam.g.visible = headSign.visible = !!f
-  if (!f) return
-  const bx = f.state === 'warn' ? f.fx : f.x, bz = f.state === 'warn' ? f.fz : f.z
-  const top = (f.roof != null ? f.roof : f.top) + 25
-  const dC = Math.hypot(camera.position.x - bx, camera.position.z - bz)
-  const R = Math.max(0.5, dC * 0.008)
-  beam.g.position.set(bx, f.ground, bz); beam.col.scale.set(R, top - f.ground, R)
-  beam.mat.opacity = Math.max(0, Math.min(1, (dC - 12) / 30)) * 0.85   // 近くでは薄く（人を隠さない）
+  const on = rd && mode === 'play' && !rd.over ? active(rd) : []
   const k = performance.now() / 1000
+  on.forEach((p, i) => {
+    const m = markAt(i), px = p.state === 'warn' ? p.fx : p.x, pz = p.state === 'warn' ? p.fz : p.z
+    const top = (p.roof != null ? p.roof : p.top) + 25
+    const dC = Math.hypot(camera.position.x - px, camera.position.z - pz)
+    const R = Math.max(0.7, dC * 0.011)
+    m.id = p.id
+    m.g.visible = m.halo.visible = m.ring.visible = true
+    m.g.position.set(px, p.ground, pz); m.col.scale.set(R, top - p.ground, R)
+    m.mat.opacity = 0.2 + Math.max(0, Math.min(1, (dC - 12) / 30)) * 0.65   // 近くでは薄く（人を隠さない）が、消さない
+    const dH = camera.position.distanceTo(_w.set(p.x, p.y + 0.7, p.z))
+    m.halo.position.copy(_w)
+    m.halo.scale.setScalar(Math.max(4.5, dH * 0.12) * (1 + Math.sin(k * 6 + p.id) * 0.06))
+    m.ring.position.set(p.fx, p.ground + 0.07, p.fz)
+    m.ring.scale.setScalar(1 + (Math.sin(k * 5 + p.id) + 1) * 0.12)
+  })
+  for (let i = on.length; i < markPool.length; i++) { const m = markPool[i]; m.id = null; m.g.visible = m.halo.visible = m.ring.visible = false }
+  const f = on.length && rd.carry.length < CATCH.carryMax ? urgent(rd) : null
+  headSign.visible = !!f
+  if (!f) return
   headSign.position.set(f.x, f.y + 2.6 + Math.sin(k * 4) * 0.12, f.z)
   headSign.material.rotation = Math.sin(k * 5) * 0.18
   headSign.scale.setScalar(Math.max(1.4, camera.position.distanceTo(headSign.position) * 0.045))
@@ -738,7 +764,7 @@ function render(dt) {
   if (mode === 'play' && me && !me.rope && !touchMode && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position) }
   if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) { const gv = me.grounded ? 0 : Math.min(0.35, Math.max(0, (v3 - 16) / 40)); wl.g.gain.value = Number.isFinite(gv) ? gv : 0 } }   // 風: 地面では鳴らさない・空中で 16m/s から（2026-11-03 本人「謎の水の音がずっと鳴ってる」）
   drawSpeed(mode === 'play' && me ? Math.hypot(me.vx, me.vy, me.vz) : 0, dt)
-  if (mode !== 'play') dropRing.visible = false
+  if (mode !== 'play') updateMarks()   // 結果・タイトルで目印を残さない
   fx.update(dt)
   fx.shake = Math.max(0, fx.shake - dt * 2.5)
   if (mode === 'play' && rd) {
@@ -768,13 +794,13 @@ function render(dt) {
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.sky = {
-  get mode() { return mode }, beam: beam.g, headSign, PITCH_MIN, log, get hitStop() { return hitStop }, get flashA() { return flashA }, get fovKick() { return fovKick }, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
+  get mode() { return mode }, marks: () => markPool.filter(m => m.g.visible).map(m => ({ id: m.id, beamX: m.g.position.x, beamZ: m.g.position.z, beamBottom: m.g.position.y, beamTop: m.g.position.y + m.col.scale.y, beamOpacity: m.mat.opacity, haloX: m.halo.position.x, haloY: m.halo.position.y, haloZ: m.halo.position.z, haloSize: m.halo.scale.x, ringX: m.ring.position.x, ringZ: m.ring.position.z, ringY: m.ring.position.y })), markPool, renderer, scene, CATCH, headSign, PITCH_MIN, log, get hitStop() { return hitStop }, get flashA() { return flashA }, get fovKick() { return fovKick }, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
   start: seed => startRound(seed), setMode: m => { gameMode = m; showMode() }, get gameMode() { return gameMode }, toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },
     teleport: (x, y, z, yaw) => { Object.assign(me, { x, y, z, vx: 0, vy: 0, vz: 0, rope: null, climbing: null, grounded: y < 0.1 }); if (yaw != null) me.yaw = yaw },
     pressWire: (sx, sy) => aimAt(sx, sy), compass: (x, z) => compassAng(x, z), pressJump: () => { press.jump = true }, wireAuto: () => { pendingWire = { at: null, key: true } },
-    keys, stick, say, get model() { return model }, fallTime
+    keys, stick, say, get model() { return model }, fallTime, render: n => { for (let i = 0; i < n; i++) render(1 / 30) }
   }
 }
 applyLang()

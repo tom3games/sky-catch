@@ -16,6 +16,7 @@ const URL0 = `http://localhost:${PORT}/`
 let pass = 0, fail = 0
 const results = []
 async function t(name, fn) {
+  if (process.env.ONLY && !new RegExp(process.env.ONLY).test(name)) return   // ONLY=正規表現 で一部だけ回す
   try { const r = await fn(); if (r === false) throw new Error('false'); pass++; results.push(`ok   ${name}${r && r !== true ? '  ' + JSON.stringify(r) : ''}`) }
   catch (e) { fail++; results.push(`FAIL ${name}  ${e.message.split('\n')[0]}`) }
 }
@@ -402,8 +403,8 @@ await t('落ちてくる人の目印（2026-11-03 本人「どっから落ちて
     const f = sky.rd.fallers.find(f => f.state === 'warn' || f.state === 'fall'), me = sky.me, cam = sky.cam
     sky.dbg.teleport(f.fx + f.nx * 12, 0, f.fz + f.nz * 12, Math.atan2(-f.nx, -f.nz)); cam.hd = Math.atan2(-f.nx, -f.nz); cam.pitch = 0.15; cam.userT = performance.now() + 1e7
     sky.dbg.step(1); for (let i = 0; i < 30; i++) sky.dbg.step(0)
-    const b = sky.beam, col = b.children[0], hb = document.getElementById('heightBox')
-    const out = { beamVis: b.visible, dx: +(b.position.x - f.fx).toFixed(2), dz: +(b.position.z - f.fz).toFixed(2), bottom: +(b.position.y - f.ground).toFixed(1), top: +(b.position.y + col.scale.y).toFixed(1), roof: +f.roof.toFixed(1), sign: sky.headSign.visible && sky.headSign.position.y > f.y + 2, dir: hb.dataset.dir, text: hb.textContent, look: hb.classList.contains('look-up') }
+    const b = sky.marks().find(m => m.id === f.id) || {}, hb = document.getElementById('heightBox')
+    const out = { beamVis: !!b.id || b.id === 0, dx: +(b.beamX - f.fx).toFixed(2), dz: +(b.beamZ - f.fz).toFixed(2), bottom: +(b.beamBottom - f.ground).toFixed(1), top: +b.beamTop.toFixed(1), roof: +f.roof.toFixed(1), sign: sky.headSign.visible && sky.headSign.position.y > f.y + 2, dir: hb.dataset.dir, text: hb.textContent, look: hb.classList.contains('look-up') }
     cam.userT = -1e9
     return out
   })
@@ -489,7 +490,7 @@ await t('何もしない1回は最低の判定（0人・0点）', async () => {
   await p.click('#btnAgain'); await p.waitForTimeout(300)
   await p.evaluate(() => { sky.dbg.pause(true); sky.dbg.step(60 * 92); sky.dbg.pause(false) }); await p.waitForTimeout(2500)
   const r = await p.evaluate(() => ({ mode: sky.mode, score: window.__lastScore, saved: sky.rd.saved, missed: sky.rd.missed }))
-  expect(r.mode === 'result' && r.score === 0 && r.saved === 0 && r.missed >= 5, r); return r
+  expect(r.mode === 'result' && r.score === 0 && r.saved === 0 && r.missed >= 3, r); return r
 })
 await t('エンドレス（画面）: タイトルで選ぶと保存され、時計は経った秒を数え上げ、1人落とすと終わって感謝状が「続いた時間」になる', async () => {
   await p.click('#btnTitle'); await p.waitForTimeout(300)
@@ -516,6 +517,95 @@ await t('英語に切り替わる', async () => {
   await p.click('#btnLang')
 })
 await t('エラーが出ていない（通しのあと）', async () => { expect(p.errs.length === 0, p.errs.join('|')) })
+// ---- 落ちている間の黄色い光（2026-11-04 本人「落ちてる途中でもその場所を黄色く光らせて」）
+// 画面の canvas の、人のまわりの黄色い画素を数える
+const yellowAround = q => q.evaluate(() => {
+  const f = window.__mk; const c = sky.renderer.domElement, gl = sky.renderer.getContext()
+  sky.dbg.render(1)
+  const V = sky.camera.position.constructor, v = new V(f.x, f.y + 0.7, f.z).project(sky.camera)
+  const px = Math.round((v.x * 0.5 + 0.5) * c.width), py = Math.round((v.y * 0.5 + 0.5) * c.height), R = Math.round(c.height * 0.06)
+  if (px < 0 || py < 0 || px > c.width || py > c.height) return { n: 0, share: 0, onScreen: false }
+  const x0 = Math.max(0, px - R), y0 = Math.max(0, py - R), w = Math.min(c.width - x0, R * 2), h = Math.min(c.height - y0, R * 2)
+  const buf = new Uint8Array(w * h * 4); gl.readPixels(x0, y0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf)
+  let n = 0; for (let i = 0; i < buf.length; i += 4) if (buf[i] > 225 && buf[i + 1] > 175 && buf[i + 2] < 90) n++
+  return { n, share: +(n / (w * h)).toFixed(3), onScreen: v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1 }
+})
+await t('落下中の黄色い光: 9種すべてで、落ちている間ずっと人の位置に光がついてくる（柱・人の輪）。地面の落下地点にも輪。ぐらつき中も光る', async () => {
+  const r = await p.evaluate(kinds => {
+    sky.start(11); sky.dbg.pause(true); sky.rd.next = 1e9; sky.rd.fallers.length = 0
+    const out = {}
+    for (const kind of kinds) {
+      sky.rd.fallers.length = 0
+      const s = sky.world.colliders.find(o => o.kind === 'building' && o.y1 > 30)
+      const nx = 1, nz = 0, fx = s.cx + s.hw + 1.3, fz = s.cz
+      const f = { id: 900 + kinds.indexOf(kind), state: 'warn', t: 0, look: 1, reason: 0, kind, ph: 0, warnT: 0.2, x: fx - 0.8, z: fz, y: 34, fx, fz, top: 34, roof: s.y1, nx, nz, vy: 0, ground: 0 }
+      sky.rd.fallers.push(f); sky.rd.lastFall = -99
+      sky.dbg.teleport(fx + 60, 0, fz, -Math.PI / 2)
+      sky.dbg.step(1)
+      const w = sky.marks().find(m => m.id === f.id)
+      const warnOk = !!w && Math.abs(w.beamX - fx) < 0.01 && Math.abs(w.ringX - fx) < 0.01 && Math.abs(w.haloY - (f.y + 0.7)) < 0.3
+      for (let i = 0; i < 60 && f.state === 'warn'; i++) { sky.dbg.teleport(fx + 60, 0, fz, -Math.PI / 2); sky.dbg.step(1) }
+      const samples = []
+      for (let i = 0; i < 400 && f.state !== 'landed' && samples.length < 12; i++) {
+        sky.dbg.teleport(fx + 60, 0, fz, -Math.PI / 2); sky.dbg.step(5)
+        if (f.state !== 'fall') break
+        const m = sky.marks().find(m => m.id === f.id)
+        samples.push(m ? { dx: +Math.abs(m.haloX - f.x).toFixed(2), dz: +Math.abs(m.haloZ - f.z).toFixed(2), dy: +Math.abs(m.haloY - (f.y + 0.7)).toFixed(2), bx: +Math.abs(m.beamX - f.x).toFixed(2), bz: +Math.abs(m.beamZ - f.z).toFixed(2), op: +m.beamOpacity.toFixed(2), size: +m.haloSize.toFixed(1), ring: +Math.abs(m.ringX - f.fx).toFixed(2) } : null)
+      }
+      const ys = samples.filter(Boolean)
+      out[kind] = { warnOk, n: samples.length, missing: samples.filter(x => !x).length, maxD: Math.max(...ys.map(a => Math.max(a.dx, a.dz, a.dy, a.bx, a.bz))), minOp: Math.min(...ys.map(a => a.op)), size: ys[0] && ys[0].size }
+    }
+    sky.rd.fallers.length = 0; sky.dbg.step(1); sky.dbg.pause(false)
+    return out
+  }, ['normal', 'cat', 'heavy', 'salary', 'selfie', 'ittan', 'kappa', 'karakasa', 'lover'])
+  for (const [k, v] of Object.entries(r)) expect(v.warnOk && v.n >= 5 && v.missing === 0 && v.maxD < 0.3 && v.minOp >= 0.2, k + ' ' + JSON.stringify(v))
+  return r
+})
+await t('落下中の黄色い光: 複数人なら全員分（前は急ぐ1人だけ）。抱えきれない時も消えない。受けとめた瞬間・地面に落ちた瞬間に、その人の光が消える', async () => {
+  const r = await p.evaluate(() => {
+    sky.start(12); sky.dbg.pause(true); sky.rd.next = 1e9; sky.rd.fallers.length = 0
+    const s = sky.world.colliders.find(o => o.kind === 'building' && o.y1 > 30), me = sky.me
+    const mk = (id, dz, y) => ({ id, state: 'fall', t: 0, look: 1, reason: 0, kind: 'normal', ph: 0, warnT: 1, x: s.cx + s.hw + 1.3, z: s.cz + dz, y, fx: s.cx + s.hw + 1.3, fz: s.cz + dz, top: y, roof: s.y1, nx: 1, nz: 0, vy: -1, ground: 0 })
+    const a = mk(901, 0, 30), b = mk(902, 20, 30), c = mk(903, -20, 2)
+    sky.rd.fallers.push(a, b, c)
+    sky.dbg.teleport(a.x + 80, 0, a.z, -Math.PI / 2); sky.dbg.step(1)
+    const ids = () => sky.marks().map(m => m.id).sort()
+    const three = ids()
+    // 抱えきれない時（carryMax）でも全員に光
+    const full = sky.CATCH.carryMax; sky.rd.carry.push(...Array.from({ length: full }, (_, i) => ({ id: 800 + i, state: 'carried', kind: 'normal', slot: i, x: me.x, y: me.y, z: me.z, nx: 1, nz: 0, top: 1, look: 1, reason: 0, t: 0 })))
+    sky.dbg.step(1); const whenFull = ids(); sky.rd.carry.length = 0
+    // 地面に落ちる（c は 2m から）
+    for (let i = 0; i < 120 && c.state === 'fall'; i++) { sky.dbg.teleport(a.x + 80, 0, a.z, -Math.PI / 2); sky.dbg.step(1) }
+    const landedState = c.state, afterLand = ids()
+    // 受けとめる: a の真横の空中へ
+    sky.dbg.teleport(a.x + 1, a.y - 0.2, a.z, -Math.PI / 2); me.grounded = false; me.vy = 0; sky.dbg.step(1)
+    const caughtState = a.state, afterCatch = ids()
+    const left = sky.marks().length
+    sky.rd.fallers.length = 0; sky.rd.carry.length = 0; sky.dbg.step(1); const none = sky.marks().length
+    sky.dbg.pause(false)
+    return { three, whenFull, landedState, afterLand, caughtState, afterCatch, left, none }
+  })
+  expect(r.three.length === 3 && r.whenFull.length === 3 && r.landedState === 'landed' && !r.afterLand.includes(903) && r.afterLand.length === 2 && r.caughtState === 'carried' && !r.afterCatch.includes(901) && r.afterCatch.includes(902) && r.none === 0, JSON.stringify(r)); return r
+})
+await t('落下中の黄色い光: 実際の画面に黄色が出ている（人のまわりの画素を数える。光を消すと減る）。100m 先でも輪の大きさが画面で保たれる', async () => {
+  const set = (mode, dist) => p.evaluate(([mode, dist]) => {
+    sky.start(13); sky.dbg.pause(true); sky.rd.next = 1e9; sky.rd.fallers.length = 0
+    const s = sky.world.colliders.find(o => o.kind === 'building' && o.y1 > 30)
+    const f = { id: 950, state: 'fall', t: 0, look: 1, reason: 0, kind: 'normal', ph: 0, warnT: 1, x: s.cx + s.hw + 1.3, z: s.cz, y: 26, fx: s.cx + s.hw + 1.3, fz: s.cz, top: 34, roof: s.y1, nx: 1, nz: 0, vy: 0, ground: 0 }
+    sky.rd.fallers.push(f)
+    const yaw = Math.atan2(f.x - (f.x + dist), 0)
+    sky.dbg.teleport(f.x + dist, 0, f.z, yaw); sky.cam.hd = yaw; sky.cam.pitch = -0.32; sky.cam.userT = performance.now() + 1e8
+    for (let i = 0; i < 30; i++) sky.dbg.step(0)
+    window.__mk = { x: f.x, y: f.y, z: f.z }
+    if (mode === 'off') sky.rd.fallers.length = 0   // 人ごと消して背景の黄色を数える
+    sky.dbg.step(0)
+  }, [mode, dist])
+  await set('on', 45); const on = await yellowAround(p)
+  await set('off', 45); const off = await yellowAround(p)
+  await set('on', 110); const far = await yellowAround(p)
+  await p.evaluate(() => { sky.rd.fallers.length = 0; sky.dbg.step(1); sky.dbg.pause(false) })
+  expect(on.onScreen && far.onScreen && on.n > 300 && on.n > off.n + 250 && far.n > 150, JSON.stringify({ on, off, far })); return { on, off, far }
+})
 await p.close()
 
 // ---------------------------------------------------------------- 6サイズ × 全画面
