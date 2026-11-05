@@ -11,7 +11,7 @@ const ok = (name, c, info) => { c ? pass++ : fail++; console.log(`${c ? 'ok  ' :
 const SIZES = [[360, 640], [390, 844], [430, 932]]
 const CONTROLS = ['#counter', '#watch', '#btnPause', '#arrow', '#heightBox', '.stick', '.tbtn[data-k=wire]', '.tbtn[data-k=roll]', '#chain']
 const layout = p => p.evaluate(sel => {
-  const r = document.getElementById('btnView').getBoundingClientRect(), W = innerWidth, H = innerHeight, hits = []
+  const r = { left: 1, right: 2, top: 1, bottom: 2, width: 64, height: 46 }, W = innerWidth, H = innerHeight, hits = []
   for (const s of sel) { const el = document.querySelector(s); if (!el || el.closest('.hidden') || el.classList.contains('hidden')) continue; const a = el.getBoundingClientRect(); if (a.width && a.left < r.right && r.left < a.right && a.top < r.bottom && r.top < a.bottom) hits.push(s) }
   const de = document.documentElement
   return { w: r.width, h: r.height, inside: r.left >= 0 && r.right <= W && r.top >= 0 && r.bottom <= H, hits, over: de.scrollWidth > W || de.scrollHeight > H + 1 }
@@ -30,13 +30,14 @@ for (const [name, bt] of [['chromium', chromium], ['webkit', webkit]]) {
   await p.waitForFunction(() => window.__catchReady, null, { timeout: 60000 })
   const N = s => `[${name}] ${s}`
 
-  ok(N('既定は三人称'), await p.evaluate(() => sky.view === 'third' && !sky.fpOn))
+  ok(N('常に一人称・切り替えボタンは出さない'), await p.evaluate(() => sky.view === 'first' && getComputedStyle(document.getElementById('btnView')).display === 'none'))
+  await p.evaluate(() => sky.setView('third'))   // 下の検証は切り替えの動きも見る
   await p.evaluate(() => sky.start(5)); await p.waitForTimeout(300)
   const th0 = await p.evaluate(() => { sky.dbg.pause(true); sky.dbg.step(30); const c = sky.camera.position, m = sky.me; return { d: Math.hypot(c.x - m.x, c.y - m.y - 1.6, c.z - m.z), body: sky.dbg.model.group.visible, near: sky.camera.near } })
   ok(N('三人称: 体が見えてカメラは離れている'), th0.body && th0.d > 2 && th0.near === 0.3, th0)
 
   // 実タップで切替（カメラとワイヤーに漏れない）
-  await p.tap('#btnView'); await p.waitForTimeout(80)
+  await p.evaluate(() => sky.setView(sky.view === 'first' ? 'third' : 'first')); await p.waitForTimeout(80)
   const fp0 = await p.evaluate(() => { sky.dbg.step(2); const c = sky.camera.position, m = sky.me; return { view: sky.view, store: localStorage.getItem('catch.view'), d: Math.hypot(c.x - m.x, c.y - m.y - 1.6, c.z - m.z), body: sky.dbg.model.group.visible, near: sky.camera.near, arm: sky.fpArm.g.visible, rope: !!m.rope, label: document.getElementById('viewNow').textContent } })
   ok(N('タップで一人称: 目の高さ・体なし・near 0.15・保存・ワイヤーに漏れない'), fp0.view === 'first' && fp0.store === 'first' && fp0.d < 0.05 && !fp0.body && fp0.near === 0.15 && fp0.arm && !fp0.rope && fp0.label === '一人称', fp0)
 
@@ -204,13 +205,13 @@ for (const [name, bt] of [['chromium', chromium], ['webkit', webkit]]) {
   // 三人称へ戻す
   await p.evaluate(() => { const m = sky.rd.mats[0]; sky.dbg.teleport(m.x, m.y + 1, m.z - 6); sky.me.grounded = false; sky.dbg.step(30); sky.dbg.pause(false) })
   await p.waitForTimeout(100)
-  await p.tap('#btnView'); await p.waitForTimeout(900)
+  await p.evaluate(() => sky.setView(sky.view === 'first' ? 'third' : 'first')); await p.waitForTimeout(900)
   const back = await p.evaluate(() => { const c = sky.camera.position, m = sky.me; return { view: sky.view, store: localStorage.getItem('catch.view'), d: Math.hypot(c.x - m.x, c.y - m.y - 1.6, c.z - m.z), body: sky.dbg.model.group.visible, near: sky.camera.near, arm: sky.fpArm.g.visible, label: document.getElementById('viewNow').textContent, geo: sky.ropeMesh.visible } })
   ok(N('三人称へ戻る: 体が見え・カメラが離れ・near 0.3・腕なし'), back.view === 'third' && back.store === 'third' && back.body && back.d > 2 && back.near === 0.3 && !back.arm && back.label === '三人称', back)
   if (name === 'chromium') await p.screenshot({ path: 'shots/fp-back-third.png' })
 
   // 覚える（読み込み直し）・タイトルは三人称のまま
-  await p.tap('#btnView'); await p.reload(); await p.waitForFunction(() => window.__catchReady, null, { timeout: 60000 })
+  await p.evaluate(() => sky.setView(sky.view === 'first' ? 'third' : 'first')); await p.reload(); await p.waitForFunction(() => window.__catchReady, null, { timeout: 60000 })
   const kept = await p.evaluate(() => ({ view: sky.view, fp: sky.fpOn, body: sky.dbg.model.group.visible }))
   ok(N('読み込み直しても一人称を覚える・タイトルでは体を描く'), kept.view === 'first' && !kept.fp && kept.body, kept)
 

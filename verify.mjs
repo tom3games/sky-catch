@@ -12,7 +12,7 @@ mkdirSync(ROOT + '/shots', { recursive: true })
 const PORT = 5394
 const server = spawn(process.execPath, ['server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) } })
 await new Promise(r => setTimeout(r, 400))
-const URL0 = `http://localhost:${PORT}/`
+const URL0 = `http://localhost:${PORT}/?third`   // 三人称の動きも壊れていないか見る。一人称は _fp.mjs
 let pass = 0, fail = 0
 const results = []
 async function t(name, fn) {
@@ -677,12 +677,12 @@ await t('WebKit: ローリングのボタンは地面にいる時だけ出て、
   const inAir = await wp.evaluate(() => !document.querySelector('.tbtn[data-k=roll]').classList.contains('hidden'))
   expect(onGround && rolling.v > 10 && !inAir, { onGround, rolling, inAir }); return { speed: +rolling.v.toFixed(1) }
 })
-await t('視点: 既定は三人称で、ボタンで一人称↔三人称（詳しくは _fp.mjs）', async () => {
+await t('視点: setView で一人称↔三人称（ボタンは隠している。詳しくは _fp.mjs）', async () => {
   await wp.evaluate(() => { sky.me.rope = null; sky.setView('third') }); await wp.waitForTimeout(100)
   const a = await wp.evaluate(() => sky.dbg.model.group.visible)
-  await wp.tap('#btnView'); await wp.waitForTimeout(100)
+  await wp.evaluate(() => sky.setView('first')); await wp.waitForTimeout(100)
   const b = await wp.evaluate(() => ({ body: sky.dbg.model.group.visible, near: sky.camera.near }))
-  await wp.tap('#btnView'); await wp.waitForTimeout(100)
+  await wp.evaluate(() => sky.setView('third')); await wp.waitForTimeout(100)
   const c = await wp.evaluate(() => ({ body: sky.dbg.model.group.visible, near: sky.camera.near }))
   expect(a && !b.body && b.near === 0.15 && c.body && c.near === 0.3, { a, b, c }); return true
 })
