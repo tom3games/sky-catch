@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=13'
-import { createWorld } from '../shared/track.js?v=13'
-import { buildScene } from './scene.js?v=13'
-import { FX } from './fx.js?v=13'
-import { loadSky, setAniso } from './look.js?v=13'
-import { Q } from './quality.js?v=13'
-import { RunnerModel } from './runnermodel.js?v=13'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=13'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=13'
-import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=13'
-import { createBot, botInput } from '../shared/bot.js?v=13'
-import { drawCertificate } from './certificate.js?v=13'
+import { GAME } from '../shared/config.js?v=14'
+import { createWorld } from '../shared/track.js?v=14'
+import { buildScene } from './scene.js?v=14'
+import { FX } from './fx.js?v=14'
+import { loadSky, setAniso } from './look.js?v=14'
+import { Q } from './quality.js?v=14'
+import { RunnerModel } from './runnermodel.js?v=14'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=14'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=14'
+import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=14'
+import { createBot, botInput } from '../shared/bot.js?v=14'
+import { drawCertificate } from './certificate.js?v=14'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
@@ -55,7 +55,7 @@ const T = {
     credit: '音: Kenney, rubberduck, artisticdude, poinl, Almitory, eXpl0it3r ほか（CC0）／人物: KayKit, Kenney（CC0）。詳しくは CREDITS.md',
     saved: '救助', carry: n => n ? `抱え${n}` : '', chain: n => `${n}連続`,
     pause: '休憩', paused: '休憩中', resume: '戻る', quit: 'やめる',
-    jump: '跳ぶ', roll: 'ローリング', tooFar: '届かない',
+    jump: '跳ぶ', roll: 'ローリング', tooFar: '届かない', viewLab: '視点', view3: '三人称', view1: '一人称',
     hintWire: 'ビルをタッチかボタンでワイヤー', hintWirePc: 'ビルをクリック（か E）でワイヤー',
     hintClimb: '壁ではスティックで這う。大きいボタンで離れる', hintMat: '青い救護マットに着地して引き渡そう',
     warnTag: s => `あと${s}秒`, fallingShort: '落下中', hUp: m => `上に ${m}m`, hDown: m => `下に ${m}m`, hSame: '同じ高さ', lookUp: '上を見て', falling: 'わーっ！', full: 'もう抱えられない！',
@@ -87,7 +87,7 @@ const T = {
     credit: 'Sounds: Kenney, rubberduck, artisticdude, poinl, Almitory, eXpl0it3r and others (CC0) / Characters: KayKit, Kenney (CC0). See CREDITS.md',
     saved: 'SAVED', carry: n => n ? `holding ${n}` : '', chain: n => `${n} streak`,
     pause: 'Break', paused: 'On break', resume: 'Back', quit: 'Quit',
-    jump: 'Jump', roll: 'ROLL', tooFar: 'Too far',
+    jump: 'Jump', roll: 'ROLL', tooFar: 'Too far', viewLab: 'VIEW', view3: '3rd', view1: '1st',
     hintWire: 'Tap a building or the big button to wire', hintWirePc: 'Click a building (or E) to wire',
     hintClimb: 'Crawl with the stick. The big button lets go', hintMat: 'Land on a blue rescue mat to hand them over',
     warnTag: s => `${s}s`, fallingShort: 'Falling', hUp: m => `${m}m up`, hDown: m => `${m}m down`, hSame: 'Same height', lookUp: 'Look up', falling: 'Waaah!', full: 'Hands full!',
@@ -104,6 +104,11 @@ const T = {
     postText: (n, s) => `I caught ${n} falling people in Sky Catch and scored ${s}`
   }
 }
+// 視点（2026-11-05 本人「空中に1人称視点を追加してみて欲しい。テスト的に」）。既定は今までの三人称。遊び中の小さいボタンで切り替えて覚える
+let viewMode = store.get('catch.view') === 'first' ? 'first' : 'third'
+function showView() { $('viewNow').textContent = t(viewMode === 'first' ? 'view1' : 'view3'); $('btnView').classList.toggle('on', viewMode === 'first') }
+function setView(v) { viewMode = v === 'first' ? 'first' : 'third'; store.set('catch.view', viewMode); showView() }
+const fpOn = () => mode === 'play' && !!me && viewMode === 'first'
 let gameMode = store.get('catch.mode') === 'endless' ? 'endless' : 'normal'   // 通常 / エンドレス（2026-11-03 本人「誰かを落としてしまうまでエンドレスでできるモード」）
 let lang = store.get('catch.lang') || ((navigator.language || 'ja').startsWith('ja') ? 'ja' : 'en')
 const t = k => T[lang][k]
@@ -114,6 +119,7 @@ function applyLang() {
   $('howList').innerHTML = t('howItems').map((s, i) => `<li data-n="${i + 1}"><span>${s}</span></li>`).join('')
   $('howKeys').textContent = touchMode ? '' : t('keysPc')
   $('btnMute').textContent = Snd.muted ? t('muteOff') : t('muteOn')
+  showView()
 }
 
 // ---------------------------------------------------------------- 音（録音素材だけ）
@@ -215,6 +221,18 @@ function clearVis() { for (const v of vis.values()) { scene.remove(v.p.group); s
 // ワイヤー
 const ropeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.5), new THREE.MeshBasicMaterial({ color: 0x2b2b2b }))
 ropeMesh.visible = false; scene.add(ropeMesh)
+// 一人称のワイヤー: 手元は細く、先は太く（近くで太い棒に見えない・遠くでも線が消えない）
+const ropeGeoThird = ropeMesh.geometry, ropeGeoFirst = new THREE.CylinderGeometry(0.08, 0.011, 1, 6).rotateX(Math.PI / 2).translate(0, 0, 0.5)
+// 一人称の腕（カメラの子。壁が近くても腕は壁に埋まらないよう、いちばん手前に描く）
+const fpArm = (() => {
+  const mk = (geo, color, order) => { const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.75, transparent: true, depthTest: false, depthWrite: false, fog: false })); m.renderOrder = order; m.frustumCulled = false; return m }
+  const sleeve = mk(new THREE.CylinderGeometry(0.021, 0.036, 1, 10), 0xd9772a, 20)
+  const glove = mk(new THREE.CapsuleGeometry(0.023, 0.05, 4, 10), 0x6b4a32, 21)   // 隊員の手袋・服の色
+  const nozzle = mk(new THREE.CylinderGeometry(0.007, 0.012, 0.035, 8), 0x22262c, 22)
+  const g = new THREE.Group(); g.add(sleeve, glove, nozzle); g.visible = false
+  return { g, sleeve, glove, nozzle, k: 0, hand: new THREE.Vector3(), elbow: new THREE.Vector3(), dir: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), world: new THREE.Vector3() }
+})()
+camera.add(fpArm.g); scene.add(camera)
 const aimMark = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.75, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false }))
 aimMark.renderOrder = 5; aimMark.visible = false; scene.add(aimMark)
 // 落ちてくる人の場所が分かる目印（2026-11-03 本人「どっから落ちてきてんのか分からへん」。空中出前の届け先の形を流用）
@@ -364,6 +382,9 @@ const stick = { x: 0, y: 0, id: null }
   // 大きいボタン: 前の上へ自動でワイヤー。ワイヤー中なら離す、壁に張り付き中なら壁から離れる（跳ぶボタンは無い。2026-11-02 本人「飛ぶってボタンいらん」）
   for (const b of document.querySelectorAll('.tbtn')) b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); if (b.dataset.k === 'wire') pendingWire = { at: null, key: true }; if (b.dataset.k === 'roll') press.roll = true })
 }
+let lastWireYaw
+// 一人称の大きいボタン: 見ている画面の中の掛け点を選ぶ（三人称の 55 度前後は、一人称だと画面の上の外へ出て、どこへ掛かったか見えない）
+const fpAim = () => ({ pitch: Math.max(32, Math.min(76, -cam.pitch * 180 / Math.PI + 30)), yawK: 0.05 })
 function screenBasis() { const e = camera.matrixWorld.elements; let rx = e[0], rz = e[2], fx = -e[8], fz = -e[10]; const a = Math.hypot(rx, rz) || 1, b = Math.hypot(fx, fz) || 1; return { r: { x: rx / a, z: rz / a }, f: { x: fx / b, z: fz / b } } }
 function gather() {
   let thr = 0, brk = 0, steer = 0, cx = 0, cy = 0
@@ -390,6 +411,8 @@ function gather() {
   }
   const inp = { throttle: thr, brake: brk, steer, jump: press.jump, wire: false, cx, cy, moveDir, roll: press.roll }
   inp.wireYaw = moveDir ? Math.atan2(moveDir.x, moveDir.z) : touchMode ? Math.atan2(SF.x, SF.z) : undefined   // ワイヤーボタンの自動狙い: スティックの向き、スマホでは画面の前
+  lastWireYaw = inp.wireYaw
+  if (fpOn()) inp.wireAim = fpAim()
   if (pendingWire) { inp.wire = true; if (pendingWire.at) inp.wireAt = pendingWire.at; me._tap = pendingWire; pendingWire = null }
   press.jump = false; press.roll = false
   return inp
@@ -411,7 +434,7 @@ function startRound(seed = Math.floor(Math.random() * 1e6)) {
   mode = 'play'; paused = false; demo = null; photo = null; photoScore = -1; endAt = 0
   rd = createRound(world, seed, gameMode); me = spawnRunner('me', rd)
   clearVis(); placeMats(rd.mats); newModel()
-  cam.hd = 0; cam.pitch = 0.15; cam.userT = -1e9
+  cam.hd = 0; cam.pitch = viewMode === 'first' ? -0.15 : 0.15; cam.userT = -1e9   // 一人称は少し上を見て始める（掛け点が画面に入る）
   show(null); $('touch').classList.toggle('hidden', !touchMode)
   Snd.loop('bgm', 'snd/bgm_play.mp3', 0.16); Snd.loop('amb', 'snd/city_street_loop.wav', 0.26); Snd.loop('wind', 'snd/wind_loop.wav', 0.0001)
   say(`<small>${t('radioName')}</small>${t('radioLine')}`, 2.6)
@@ -451,7 +474,7 @@ function updateHud(dt) {
     if (p.behind || p.x < 10 || p.x > innerWidth - 10 || p.y < 0 || p.y > innerHeight - 10) { el.style.display = 'none'; continue }
     // 左上の数取器・右上の時計に重ねない（吹き出しは下端を合わせて上へ伸びる）
     // 遠くても黄色い輪を隠さない（吹き出しの先を輪の上に出す。輪の半径は画面で約35px、近いと大きい）
-    const p0 = project(f.x, f.y + 0.7, f.z), dH0 = camera.position.distanceTo(_w.set(f.x, f.y + 0.7, f.z)), ringPx = innerHeight / (1.25 * Math.max(1, dH0)) * Math.max(4.5, dH0 * 0.12) * 0.38
+    const p0 = project(f.x, f.y + 0.7, f.z), dH0 = camera.position.distanceTo(_w.set(f.x, f.y + 0.7, f.z)), ringPx = innerHeight / (1.25 * Math.max(1, dH0)) * haloSize(dH0) * 0.38
     const bx = Math.max(90, Math.min(innerWidth - 90, p.x)), by = Math.max(190, Math.min(p.y, p0.y - ringPx - 12))
     el.style.display = ''; el.style.left = bx + 'px'; el.style.top = by + 'px'
     el.classList.toggle('far', d > 45)
@@ -577,14 +600,17 @@ $('btnHow').onclick = () => { Snd.init(); show('how') }
 for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => show('title')
 $('btnLang').onclick = () => { lang = lang === 'ja' ? 'en' : 'ja'; store.set('catch.lang', lang); applyLang() }
 $('btnMute').onclick = () => { Snd.init(); Snd.setMute(!Snd.muted); store.set('catch.mute', Snd.muted ? '1' : '0'); applyLang() }
+$('btnView').onclick = e => { setView(viewMode === 'first' ? 'third' : 'first'); sfx('click'); e.currentTarget.blur() }   // blur: PC で Space を押した時に切り替わらないように
 $('btnPause').onclick = () => setPause(true)
 $('btnResume').onclick = () => setPause(false)
 $('btnQuit').onclick = () => { setPause(false); toTitle() }
 
+// 黄色い輪の大きさ。三人称は最低 4.5m。一人称は近づくとカメラのすぐ前に来るので、画面いっぱいにならないよう距離に合わせて小さくする
+const haloSize = dH => fpOn() ? Math.max(dH * 0.12, Math.min(4.5, dH * 0.55)) : Math.max(4.5, dH * 0.12)
 // 落ちてくる人の黄色い目印（全員分）と、頭上の看板（急ぐ人だけ）
 function updateMarks() {
   const on = rd && mode === 'play' && !rd.over ? active(rd) : []
-  const k = performance.now() / 1000
+  const k = performance.now() / 1000, fp = fpOn()
   on.forEach((p, i) => {
     const m = markAt(i), px = p.state === 'warn' ? p.fx : p.x, pz = p.state === 'warn' ? p.fz : p.z
     const top = (p.roof != null ? p.roof : p.top) + 25
@@ -593,10 +619,10 @@ function updateMarks() {
     m.id = p.id
     m.g.visible = m.halo.visible = m.ring.visible = true
     m.g.position.set(px, p.ground, pz); m.col.scale.set(R, top - p.ground, R)
-    m.mat.opacity = 0.2 + Math.max(0, Math.min(1, (dC - 12) / 30)) * 0.65   // 近くでは薄く（人を隠さない）が、消さない
+    m.mat.opacity = fp && dC < R + 0.6 ? 0.07 : 0.2 + Math.max(0, Math.min(1, (dC - 12) / 30)) * 0.65   // 近くでは薄く（人を隠さない）が、消さない。一人称で柱の中にいる時は画面が黄色くならないようさらに薄く
     const dH = camera.position.distanceTo(_w.set(p.x, p.y + 0.7, p.z))
     m.halo.position.copy(_w)
-    m.halo.scale.setScalar(Math.max(4.5, dH * 0.12) * (1 + Math.sin(k * 6 + p.id) * 0.06))
+    m.halo.scale.setScalar(haloSize(dH) * (1 + Math.sin(k * 6 + p.id) * 0.06))
     m.ring.position.set(p.fx, p.ground + 0.07, p.fz)
     m.ring.scale.setScalar(1 + (Math.sin(k * 5 + p.id) + 1) * 0.12)
   })
@@ -617,8 +643,10 @@ function updateCamera(dt, c) {
   let hx = Math.sin(c.yaw), hz = Math.cos(c.yaw)
   if (v > 8) { const k = c.grounded ? 0.25 : 0.45; hx = hx * (1 - k) + (c.vx / v) * k; hz = hz * (1 - k) + (c.vz / v) * k; const l = Math.hypot(hx, hz); hx /= l; hz /= l }
   const manual = touchMode || performance.now() - cam.userT < 1800   // スマホはカメラが勝手に追いかけない（空中出前と同じ）
-  if (!manual) { cam.hd = lerpAngle(cam.hd, Math.atan2(hx, hz), 1 - Math.exp(-dt * (touchMode ? 2.2 : 5))); cam.pitch += ((c.climbing ? 0.45 : 0.15) - cam.pitch) * (1 - Math.exp(-dt * 1.5)) }
+  if (!manual) { cam.hd = lerpAngle(cam.hd, Math.atan2(hx, hz), 1 - Math.exp(-dt * (touchMode ? 2.2 : 5))); if (!fpOn()) cam.pitch += ((c.climbing ? 0.45 : 0.15) - cam.pitch) * (1 - Math.exp(-dt * 1.5)) }
   hx = Math.sin(cam.hd); hz = Math.cos(cam.hd)
+  if (fpOn()) { updateFirstPerson(dt, c, pos, hx, hz); finishCamera(dt, c, FP_BANK); updateFpArm(dt, c); return }
+  camera.near = 0.3
   let back = 5.2 + Math.min(2.4, v * 0.07), up = 2.1
   if (camera.aspect < 1) { back += 0.6; up += 0.5 }
   // 見下ろす時はカメラを上げる。見上げる時はカメラを下げすぎず（地面にめり込まない）、目線だけ上へ向ける
@@ -651,6 +679,10 @@ function updateCamera(dt, c) {
   const sh_ = fx.shake
   if (sh_ > 0) camera.position.add(_v.set((Math.random() - 0.5) * sh_, (Math.random() - 0.5) * sh_ * 0.7, (Math.random() - 0.5) * sh_))
   camera.lookAt(cam.look)
+  finishCamera(dt, c, 1)
+}
+// 視野と傾き（三人称・一人称で共通）。bankK は傾きの倍率
+function finishCamera(dt, c, bankK) {
   const asp = camera.aspect
   const base = asp >= 1 ? 60 : Math.min(84, 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(37)) / asp) * 180 / Math.PI)
   const fov = base + Math.min(18, Math.max(0, Math.hypot(c.vx, c.vy, c.vz) - 6) * 0.5)   // 速いほど広く（最大 +12 から +18 に）
@@ -659,8 +691,63 @@ function updateCamera(dt, c) {
   camera.fov = cam.fov + fovKick; camera.updateProjectionMatrix()
   // 振り子の向きに少しだけ体ごと傾く（カメラの右向きに対する横の速さから）
   const me_ = camera.matrixWorld.elements, rl = Math.hypot(me_[0], me_[2]) || 1, lat = (c.vx * me_[0] + c.vz * me_[2]) / rl
-  cam.bank = (cam.bank || 0) + (Math.max(-0.1, Math.min(0.1, (c.rope ? lat : 0) * -0.004)) - (cam.bank || 0)) * (1 - Math.exp(-dt * 3))
+  cam.bank = (cam.bank || 0) + (Math.max(-0.1, Math.min(0.1, (c.rope ? lat : 0) * -0.004)) * bankK - (cam.bank || 0)) * (1 - Math.exp(-dt * 3))
   camera.rotateZ(cam.bank)
+}
+
+// ---------------------------------------------------------------- 一人称
+const FP_EYE = 1.6, FP_NEAR = 0.15, FP_WALL = 0.3, FP_WALL_OUT = 0.5, FP_WALL_LOOK = -0.95, FP_BANK = 1 / 3, FP_SHAKE = 0.3   // 酔いを減らす: 傾きは三人称の 1/3、揺れは 3 割
+// 目の位置が建物に近すぎたら外へ押し戻す（near 0.15 の画面の隅までの距離 約 0.25m より外。0.1 より遠くの奥行きのちらつきも少ない）
+function fpPushOut(p) {
+  for (let n = 0; n < 2; n++) {
+    let moved = false
+    for (const o of world.nearby(p.x, p.z)) {
+      if (o.slab || o.kind === 'bound' || o.y0 == null || p.y < o.y0 || p.y > o.y1) continue
+      const cs = Math.cos(o.yaw || 0), sn = Math.sin(o.yaw || 0), dx = p.x - o.cx, dz = p.z - o.cz
+      let lx = dx * cs - dz * sn, lz = dx * sn + dz * cs
+      const px = o.hw + FP_WALL - Math.abs(lx), pz = o.hl + FP_WALL - Math.abs(lz)
+      if (px <= 0 || pz <= 0) continue
+      if (px < pz) lx = Math.sign(lx || 1) * (o.hw + FP_WALL); else lz = Math.sign(lz || 1) * (o.hl + FP_WALL)
+      p.x = o.cx + lx * cs + lz * sn; p.z = o.cz - lx * sn + lz * cs
+      moved = true
+    }
+    if (!moved) break
+  }
+}
+function updateFirstPerson(dt, c, pos, hx, hz) {
+  camera.near = FP_NEAR
+  const eye = c.rollT > 0 && c.grounded ? 1.0 : FP_EYE   // ローリング中は目線を下げるだけ（画面は回さない）
+  cam.eye = cam.eye == null ? eye : cam.eye + (eye - cam.eye) * (1 - Math.exp(-dt * 14))
+  cam.pos.set(pos.x, Math.max(pos.y + cam.eye, world.groundAt(pos.x, pos.z, pos.y + cam.eye).h + 0.3), pos.z)
+  // 壁に張り付いた時: 目を少し外へ出す。壁を見ていたら上を向く（1回だけ。真っ暗な壁しか映らないのを防ぐ。なぞれば止まる）
+  const cl = c.climbing
+  cam.wallK = (cam.wallK || 0) + ((cl ? 1 : 0) - (cam.wallK || 0)) * (1 - Math.exp(-dt * 8))
+  if (cl) { cam.wallN = cl; if (!cam.wasClimb) cam.climbLook = hx * cl.nx + hz * cl.nz < -0.4 && performance.now() - cam.userT > 300 ? 0.5 : 0 }
+  cam.wasClimb = !!cl
+  if (cam.climbLook > 0) { cam.climbLook = performance.now() - cam.userT < 300 ? 0 : cam.climbLook - dt; cam.pitch += (FP_WALL_LOOK - cam.pitch) * (1 - Math.exp(-dt * 7)) }
+  if (cam.wallN) { cam.pos.x += cam.wallN.nx * FP_WALL_OUT * cam.wallK; cam.pos.z += cam.wallN.nz * FP_WALL_OUT * cam.wallK }
+  fpPushOut(cam.pos)
+  const el = -cam.pitch, ce = Math.cos(el), sh_ = fx.shake * FP_SHAKE
+  _w.set(hx * ce, Math.sin(el), hz * ce)
+  camera.position.copy(cam.pos)
+  if (sh_ > 0) { camera.position.add(_v.set((Math.random() - 0.5) * sh_, (Math.random() - 0.5) * sh_ * 0.7, (Math.random() - 0.5) * sh_)); fpPushOut(camera.position) }
+  camera.lookAt(_v.copy(camera.position).add(_w))
+  // 三人称へ戻す時は今の目の位置からすっと下がる
+  cam.off.subVectors(cam.pos, pos); cam.lookOff.copy(cam.off).addScaledVector(_w, 10); cam.look.copy(pos).add(cam.lookOff)
+}
+// 腕: 手は画面の決まった場所（視野が変わっても動かない）。ワイヤー中は少し上げる。肘は画面の右下の外
+function updateFpArm(dt, c) {
+  const A = fpArm, tv = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), th = tv * camera.aspect
+  A.k += ((c.rope ? 1 : 0) - A.k) * (1 - Math.exp(-dt * 12))
+  const d = 0.42, nx = 0.3 - 0.04 * A.k, ny = -0.5 + 0.16 * A.k
+  A.hand.set(nx * th * d, ny * tv * d, -d); A.elbow.set(1.15 * th * 0.3, -1.4 * tv * 0.3, -0.3)
+  A.dir.subVectors(A.hand, A.elbow)
+  const len = A.dir.length(); A.dir.divideScalar(len)
+  A.sleeve.position.copy(A.elbow).lerp(A.hand, 0.5); A.sleeve.scale.y = len; A.sleeve.quaternion.setFromUnitVectors(A.up, A.dir)
+  A.glove.position.copy(A.hand); A.glove.quaternion.copy(A.sleeve.quaternion)
+  A.nozzle.position.copy(A.hand).addScaledVector(A.dir, 0.058); A.nozzle.quaternion.copy(A.sleeve.quaternion)
+  camera.updateMatrixWorld()
+  A.world.copy(A.nozzle.position); camera.localToWorld(A.world)
 }
 
 // ---------------------------------------------------------------- ループ
@@ -729,9 +816,13 @@ function render(dt) {
   if (c && model) {
     model.update(c, dt)
     if (mode === 'play' && touchMode) rollBtn.classList.toggle('hidden', !(c.grounded && !c.climbing && !c.rope && c.stun <= 0 && !c.pit))   // ローリングは地面にいる時だけ出す
-    if (c.rope) { const h = model.handWorld; ropeMesh.visible = true; ropeMesh.position.copy(h); ropeMesh.lookAt(c.rope.x, c.rope.y, c.rope.z); ropeMesh.scale.set(1, 1, Math.max(0.1, h.distanceTo(_v.set(c.rope.x, c.rope.y, c.rope.z)))) }
-    else ropeMesh.visible = false
+    const fp = fpOn()
+    model.group.visible = !fp   // 一人称では自分の体（抱えた人も）を描かない
+    fpArm.g.visible = fp
     updateCamera(dt, c)
+    // ワイヤーの根元はカメラを動かした後に決める（一人称は手元から出す）
+    if (c.rope) { const h = fp ? fpArm.world : model.handWorld; ropeMesh.geometry = fp ? ropeGeoFirst : ropeGeoThird; ropeMesh.visible = true; ropeMesh.position.copy(h); ropeMesh.lookAt(c.rope.x, c.rope.y, c.rope.z); ropeMesh.scale.set(1, 1, Math.max(0.1, h.distanceTo(_v.set(c.rope.x, c.rope.y, c.rope.z)))) }
+    else ropeMesh.visible = false
     const d = sun.userData.dir; sun.position.set(c.x + d.x * 150, c.y + d.y * 150, c.z + d.z * 150); sun.target.position.set(c.x, c.y, c.z)
   }
   // 落ちてくる人
@@ -760,8 +851,10 @@ function render(dt) {
   }
   // キーボードの狙い（PCだけ）
   aimMark.visible = false
-  if (mode === 'play' && me && !me.rope && !touchMode && frameN % 4 === 0) aimMark.userData.p = findAnchor(world, me)
-  if (mode === 'play' && me && !me.rope && !touchMode && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position) }
+  // 一人称はスマホでも出す（大きいボタンでどこに掛かるかが体を見て分からないので。掛かる所と同じ向きで探す）
+  const showAim = mode === 'play' && me && !me.rope && (!touchMode || (fpOn() && !me.climbing))
+  if (showAim && frameN % 4 === 0) aimMark.userData.p = findAnchor(world, me, touchMode ? lastWireYaw : null, fpOn() ? fpAim() : null)
+  if (showAim && aimMark.userData.p) { const p = aimMark.userData.p; aimMark.visible = true; aimMark.position.set(p.x, p.y, p.z); aimMark.lookAt(camera.position); aimMark.scale.setScalar(fpOn() ? Math.max(1, camera.position.distanceTo(aimMark.position) * 0.02) : 1) }
   if (mode === 'play' && me) { const v3 = Math.hypot(me.vx, me.vy, me.vz); const wl = Snd.loops.wind; if (wl && wl.g) { const gv = me.grounded ? 0 : Math.min(0.35, Math.max(0, (v3 - 16) / 40)); wl.g.gain.value = Number.isFinite(gv) ? gv : 0 } }   // 風: 地面では鳴らさない・空中で 16m/s から（2026-11-03 本人「謎の水の音がずっと鳴ってる」）
   drawSpeed(mode === 'play' && me ? Math.hypot(me.vx, me.vy, me.vz) : 0, dt)
   if (mode !== 'play') updateMarks()   // 結果・タイトルで目印を残さない
@@ -782,7 +875,11 @@ function render(dt) {
     if (me.climbing) { nx = me.climbing.nx; nz = me.climbing.nz }
     pc.aspect = camera.aspect; pc.fov = camera.aspect < 1 ? 70 : 45; pc.updateProjectionMatrix()   // 画面と同じ縦横比で撮って、真ん中を 4:3 で切り出す
     pc.position.set(ch.x + nx * 6.5, ch.y + 1.2, ch.z + nz * 6.5); pc.lookAt(ch)
+    // 一人称でも感謝状の写真には隊員を写す
+    const armWas = fpArm.g.visible, bodyWas = model.group.visible
+    fpArm.g.visible = false; model.group.visible = true
     renderer.render(scene, pc)
+    fpArm.g.visible = armWas; model.group.visible = bodyWas
     const c2 = document.createElement('canvas'); c2.width = 640; c2.height = 480
     const W = renderer.domElement.width, H = renderer.domElement.height, sw = Math.min(W, H * 4 / 3), sh = sw * 3 / 4
     c2.getContext('2d').drawImage(renderer.domElement, (W - sw) / 2, (H - sh) / 2, sw, sh, 0, 0, 640, 480)
@@ -795,6 +892,7 @@ function render(dt) {
 // ---------------------------------------------------------------- 検証用の窓口
 window.sky = {
   get mode() { return mode }, marks: () => markPool.filter(m => m.g.visible).map(m => ({ id: m.id, beamX: m.g.position.x, beamZ: m.g.position.z, beamBottom: m.g.position.y, beamTop: m.g.position.y + m.col.scale.y, beamOpacity: m.mat.opacity, haloX: m.halo.position.x, haloY: m.halo.position.y, haloZ: m.halo.position.z, haloSize: m.halo.scale.x, ringX: m.ring.position.x, ringZ: m.ring.position.z, ringY: m.ring.position.y })), markPool, renderer, scene, CATCH, headSign, PITCH_MIN, log, get hitStop() { return hitStop }, get flashA() { return flashA }, get fovKick() { return fovKick }, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
+  get view() { return viewMode }, setView, get fpOn() { return fpOn() }, fpArm, ropeMesh, aimMark,
   start: seed => startRound(seed), setMode: m => { gameMode = m; showMode() }, get gameMode() { return gameMode }, toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },

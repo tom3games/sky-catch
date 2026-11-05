@@ -13,7 +13,7 @@
 // 座標は車と同じ（x=東西, z=南北, yaw=0 で +z を向く）。y は足の高さ。
 // 体力は dmg.body（車と同じ名前にして、警察と犯人の判定 chase.js をそのまま使う）
 
-import { GAME } from './config.js?v=13'
+import { GAME } from './config.js?v=14'
 
 export const RUN = {
   radius: 0.42, height: 1.75,
@@ -170,7 +170,9 @@ export function blocked(world, ax, ay, az, bx, by, bz) {
 // 狙う角度を何本か試して、前向き・ほどよい高さ・近すぎないものを選ぶ
 const PITCHES = [58, 48, 68, 40, 76, 32]
 const YAWS = [0, 18, -18, 36, -36, 54, -54, 70, -70, 84, -84]
-export function findAnchor(world, r, dirYaw = null) {
+// aim（省略可）: 一人称用の好み { pitch: 好む仰角（度）, yawK: 横へのずれの重み }。候補は同じで、並べ替えるだけ（届く範囲は変わらない）
+export function findAnchor(world, r, dirYaw = null, aim = null) {
+  const wantPitch = aim ? aim.pitch : 56, yawK = aim ? aim.yawK : 0.012
   const v = Math.hypot(r.vx, r.vz)
   let hx = Math.sin(dirYaw ?? r.yaw), hz = Math.cos(dirYaw ?? r.yaw)
   if (v > 6 && dirYaw == null) { const k = 0.45; hx = hx * (1 - k) + r.vx / v * k; hz = hz * (1 - k) + r.vz / v * k; const l = Math.hypot(hx, hz); hx /= l; hz /= l }
@@ -194,7 +196,7 @@ export function findAnchor(world, r, dirYaw = null) {
       const horiz = tHit * Math.cos(p)
       if (ay < oy + RUN.wireMinUp || horiz < 5) continue
       // 点数: 正面ほど・55度前後ほど・ほどよい長さ（18〜40m）ほど良い。遠すぎるとワイヤーが張らず振れない
-      const s = -Math.abs(yo) * 0.012 - Math.abs(pd - 56) * 0.04 - Math.abs(tHit - 28) * 0.05 - (tHit > 55 ? (tHit - 55) * 0.1 : 0)
+      const s = -Math.abs(yo) * yawK - Math.abs(pd - wantPitch) * 0.04 - Math.abs(tHit - 28) * 0.05 - (tHit > 55 ? (tHit - 55) * 0.1 : 0)
       if (s > bs) { bs = s; best = { x: ox + dx * tHit, y: ay, z: oz + dz * tHit, len: tHit } }
     }
   }
@@ -357,7 +359,7 @@ export function stepRunner(r, inp, dt, world) {
         if (d <= RUN.wireRange && w.y > r.y + 2) a = { x: w.x, y: w.y, z: w.z, len: d }
         else { a = findAnchor(world, r, Math.atan2(w.x - r.x, w.z - r.z)); if (!a) { ev.push({ t: 'wireMiss', far: true, x: w.x, y: w.y, z: w.z, d }); a = false } }   // 遠すぎる所を押したら、その向きで届く所を探す（空中出前と同じ）
       }
-      if (a === null) a = findAnchor(world, r, inp.wireYaw)   // 狙いが無い時は画面の前かスティックの向き
+      if (a === null) a = findAnchor(world, r, inp.wireYaw, inp.wireAim)   // 狙いが無い時は画面の前かスティックの向き
       if (a) {
         const d = Math.hypot(a.x - r.x, a.y - (r.y + 1.2), a.z - r.z)
         // 長さは「振り子の一番下が、足元の地面から swingLow 上に来る」長さ。今の距離より長ければ、張るまで落ちてから振れる
