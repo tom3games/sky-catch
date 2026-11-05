@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=17'
-import { createWorld } from '../shared/track.js?v=17'
-import { buildScene } from './scene.js?v=17'
-import { FX } from './fx.js?v=17'
-import { loadSky, setAniso } from './look.js?v=17'
-import { Q } from './quality.js?v=17'
-import { RunnerModel } from './runnermodel.js?v=17'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=17'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=17'
-import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=17'
-import { createBot, botInput } from '../shared/bot.js?v=17'
-import { drawCertificate } from './certificate.js?v=17'
+import { GAME } from '../shared/config.js?v=18'
+import { createWorld } from '../shared/track.js?v=18'
+import { buildScene } from './scene.js?v=18'
+import { FX } from './fx.js?v=18'
+import { loadSky, setAniso } from './look.js?v=18'
+import { Q } from './quality.js?v=18'
+import { RunnerModel } from './runnermodel.js?v=18'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=18'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=18'
+import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=18'
+import { createBot, botInput } from '../shared/bot.js?v=18'
+import { drawCertificate } from './certificate.js?v=18'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
@@ -288,7 +288,7 @@ document.body.classList.toggle('is-touch', touchMode)
 let hitStop = 0, fovKick = 0, flashA = 0   // 受けとめた・引き渡した瞬間に少し止める・視野を一瞬動かす・光る（しっぽ取り v5 と同じ）
 // 見上げられる下限（2026-11-03 本人「もうちょっとカメラを上に上げられるようにしないと、どこから落ちてきてるのか分からへん」）。-0.35 から真上近くまで
 const PITCH_MIN = -1.25
-const cam = { hd: 0, pitch: 0.15, userT: -1e9, pos: new THREE.Vector3(), off: new THREE.Vector3(-6, 3, 0), look: new THREE.Vector3(), lookOff: new THREE.Vector3(), fov: 64 }
+const cam = { air: 0, hd: 0, pitch: 0.15, userT: -1e9, pos: new THREE.Vector3(), off: new THREE.Vector3(-6, 3, 0), look: new THREE.Vector3(), lookOff: new THREE.Vector3(), fov: 64 }
 const _v = new THREE.Vector3(), _w = new THREE.Vector3()
 const photoCam = new THREE.PerspectiveCamera(50, 4 / 3, 0.3, 2400)
 
@@ -650,6 +650,10 @@ function updateCamera(dt, c) {
   camera.near = 0.3
   let back = 5.2 + Math.min(2.4, v * 0.07), up = 2.1
   if (camera.aspect < 1) { back += 0.6; up += 0.5 }
+  // 速く飛んでいる時だけ少し低く寄る（一人称で欲しかった風を切る迫力を、三人称のまま出す。2026-11-06）。じわっと変えて酔わせない
+  const airT = !c.grounded && !c.climbing ? Math.min(1, Math.max(0, (v - AIR_CAM_V0) / AIR_CAM_DV)) : 0
+  cam.air += (airT - cam.air) * (1 - Math.exp(-dt * 2.5))
+  back *= 1 - AIR_CAM_BACK * cam.air; up -= AIR_CAM_UP * cam.air
   // 見下ろす時はカメラを上げる。見上げる時はカメラを下げすぎず（地面にめり込まない）、目線だけ上へ向ける
   up += cam.pitch > 0 ? cam.pitch * 4.2 : Math.max(-0.35, cam.pitch) * 4.2; back *= 1 - Math.max(0, cam.pitch) * 0.15
   // 見上げる時は肩越しまで寄って低く構える（真上近くを見ても隊員の頭が画面の下に残る）
@@ -697,6 +701,7 @@ function finishCamera(dt, c, bankK) {
 }
 
 // ---------------------------------------------------------------- 一人称
+const AIR_CAM_V0 = 9, AIR_CAM_DV = 13, AIR_CAM_BACK = 0.3, AIR_CAM_UP = 0.8   // 秒速 9m から寄り始め 22m で最大。後ろへ3割寄り 0.8m 下げる
 const FP_FOV_PLUS = 8   // 2026-11-06 本人「視野をちょっと広げて」。縦84→92度（390x844 の横は約45→51度）。速い時も 104 度まで
 const FP_EYE = 1.6, FP_NEAR = 0.15, FP_WALL = 0.3, FP_WALL_OUT = 0.5, FP_WALL_LOOK = -0.95, FP_BANK = 1 / 3, FP_SHAKE = 0.3   // 酔いを減らす: 傾きは三人称の 1/3、揺れは 3 割
 // 目の位置が建物に近すぎたら外へ押し戻す（near 0.15 の画面の隅までの距離 約 0.25m より外。0.1 より遠くの奥行きのちらつきも少ない）
@@ -894,7 +899,7 @@ function render(dt) {
 // ---------------------------------------------------------------- 検証用の窓口
 window.sky = {
   get mode() { return mode }, marks: () => markPool.filter(m => m.g.visible).map(m => ({ id: m.id, beamX: m.g.position.x, beamZ: m.g.position.z, beamBottom: m.g.position.y, beamTop: m.g.position.y + m.col.scale.y, beamOpacity: m.mat.opacity, haloX: m.halo.position.x, haloY: m.halo.position.y, haloZ: m.halo.position.z, haloSize: m.halo.scale.x, ringX: m.ring.position.x, ringZ: m.ring.position.z, ringY: m.ring.position.y })), markPool, renderer, scene, CATCH, headSign, PITCH_MIN, log, get hitStop() { return hitStop }, get flashA() { return flashA }, get fovKick() { return fovKick }, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
-  get view() { return viewMode }, setView, get fpOn() { return fpOn() }, fpArm, ropeMesh, aimMark,
+  get camAir() { return cam.air }, get view() { return viewMode }, setView, get fpOn() { return fpOn() }, fpArm, ropeMesh, aimMark,
   start: seed => startRound(seed), setMode: m => { gameMode = m; showMode() }, get gameMode() { return gameMode }, toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
   dbg: {
     pause: on => { dbgPause = on }, step: n => { for (let i = 0; i < n; i++) stepOnce(); render(STEP) },

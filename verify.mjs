@@ -686,6 +686,16 @@ await t('視点: setView で一人称↔三人称（ボタンは隠している�
   const c = await wp.evaluate(() => ({ body: sky.dbg.model.group.visible, near: sky.camera.near }))
   expect(a && !b.body && b.near === 0.15 && c.body && c.near === 0.3, { a, b, c }); return true
 })
+await t('カメラ: 速く飛ぶ時だけ低く寄り、止まると戻る', async () => {
+  // 実時間で測る（時間送りではカメラが追いつかない）。同じ状態を保つため、毎フレーム置き直す
+  const hold = (fly, ms) => wp.evaluate(([fly, ms]) => new Promise(res => { const m = sky.me; sky.dbg.pause(false); const x0 = m.x, z0 = m.z, t0 = performance.now()
+    const loop = () => { m.x = x0; m.z = z0; m.rope = null; m.climbing = false; if (fly) { m.y = 150; m.grounded = false; m.vx = 0; m.vy = 0; m.vz = 30 } else { m.vx = m.vy = m.vz = 0 }
+      if (performance.now() - t0 < ms) requestAnimationFrame(loop); else res(sky.camAir) }; loop() }), [fly, ms])
+  const air = await hold(true, 2500)
+  await wp.evaluate(() => { const m = sky.me; m.y = 0; m.grounded = true })
+  const ground = await hold(false, 2500)
+  expect(air > 0.85 && ground < 0.15, { air, ground }); return true
+})
 await t('WebKit: エラーなし', async () => { expect(wp.errs.length === 0, wp.errs.join('|')) })
 await wb.close()
 server.kill()
