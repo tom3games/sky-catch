@@ -5,7 +5,7 @@ import { MUTE_LAUNCH, muteContext } from './mute.mjs'
 const ROOT = import.meta.dirname, PORT = 5395
 const srv = spawn(process.execPath, ['server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) } })
 await new Promise(r => setTimeout(r, 400))
-const URL0 = `http://localhost:${PORT}/`
+const URL0 = `http://localhost:${PORT}/?first`   // 一人称は本番で使っていない。残したコードが壊れていないかだけ見る
 let pass = 0, fail = 0
 const ok = (name, c, info) => { c ? pass++ : fail++; console.log(`${c ? 'ok  ' : 'FAIL'} ${name}${info !== undefined ? '  ' + JSON.stringify(info) : ''}`) }
 const SIZES = [[360, 640], [390, 844], [430, 932]]
@@ -30,7 +30,7 @@ for (const [name, bt] of [['chromium', chromium], ['webkit', webkit]]) {
   await p.waitForFunction(() => window.__catchReady, null, { timeout: 60000 })
   const N = s => `[${name}] ${s}`
 
-  ok(N('常に一人称・切り替えボタンは出さない'), await p.evaluate(() => sky.view === 'first' && getComputedStyle(document.getElementById('btnView')).display === 'none'))
+  ok(N('?first の時だけ一人称・切り替えボタンは出さない'), await p.evaluate(() => sky.view === 'first' && getComputedStyle(document.getElementById('btnView')).display === 'none'))
   await p.evaluate(() => sky.setView('third'))   // 下の検証は切り替えの動きも見る
   await p.evaluate(() => sky.start(5)); await p.waitForTimeout(300)
   const th0 = await p.evaluate(() => { sky.dbg.pause(true); sky.dbg.step(30); const c = sky.camera.position, m = sky.me; return { d: Math.hypot(c.x - m.x, c.y - m.y - 1.6, c.z - m.z), body: sky.dbg.model.group.visible, near: sky.camera.near } })

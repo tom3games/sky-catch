@@ -12,7 +12,7 @@ mkdirSync(ROOT + '/shots', { recursive: true })
 const PORT = 5394
 const server = spawn(process.execPath, ['server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) } })
 await new Promise(r => setTimeout(r, 400))
-const URL0 = `http://localhost:${PORT}/?third`   // 三人称の動きも壊れていないか見る。一人称は _fp.mjs
+const URL0 = `http://localhost:${PORT}/`
 let pass = 0, fail = 0
 const results = []
 async function t(name, fn) {
