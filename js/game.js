@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=12'
-import { createWorld } from '../shared/track.js?v=12'
-import { buildScene } from './scene.js?v=12'
-import { FX } from './fx.js?v=12'
-import { loadSky, setAniso } from './look.js?v=12'
-import { Q } from './quality.js?v=12'
-import { RunnerModel } from './runnermodel.js?v=12'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=12'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=12'
-import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=12'
-import { createBot, botInput } from '../shared/bot.js?v=12'
-import { drawCertificate } from './certificate.js?v=12'
+import { GAME } from '../shared/config.js?v=13'
+import { createWorld } from '../shared/track.js?v=13'
+import { buildScene } from './scene.js?v=13'
+import { FX } from './fx.js?v=13'
+import { loadSky, setAniso } from './look.js?v=13'
+import { Q } from './quality.js?v=13'
+import { RunnerModel } from './runnermodel.js?v=13'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=13'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=13'
+import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=13'
+import { createBot, botInput } from '../shared/bot.js?v=13'
+import { drawCertificate } from './certificate.js?v=13'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
@@ -303,7 +303,7 @@ addEventListener('pointermove', e => {
   const dx = e.clientX - g.lx, dy = e.clientY - g.ly; g.lx = e.clientX; g.ly = e.clientY
   if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) > 12) g.moved = true
   if (!g.moved) return
-  cam.hd -= dx * 0.0072; cam.pitch = Math.max(PITCH_MIN, Math.min(1, cam.pitch + dy * 0.0048)); cam.userT = performance.now()   // 見回す感度 0.006/0.004 の1.2倍（2026-11-03 本人「ほんとにちょっとだけ高く」）
+  cam.hd -= dx * 0.00792; cam.pitch = Math.max(PITCH_MIN, Math.min(1, cam.pitch + dy * 0.00528)); cam.userT = performance.now()   // 見回す感度 0.0072/0.0048 の約1.1倍（2026-11-05 本人「ほんの少しだけ上げて」。その前は 2026-11-03 に 0.006/0.004 から1.2倍）
 })
 addEventListener('pointerup', e => {
   const g = gest.get(e.pointerId); if (!g) return
