@@ -1,18 +1,18 @@
 // 空中キャッチ。ベランダからうっかり落ちてくる人を、ワイヤーで飛んで空中で受けとめ、救護マットへ運ぶ
 // WIRE ESCAPE → 空中出前 のワイヤーと街を使う。操作は WIRE ESCAPE と同じ（スティック・画面タッチでワイヤー・跳ぶ）
 import * as THREE from 'three'
-import { GAME } from '../shared/config.js?v=14'
-import { createWorld } from '../shared/track.js?v=14'
-import { buildScene } from './scene.js?v=14'
-import { FX } from './fx.js?v=14'
-import { loadSky, setAniso } from './look.js?v=14'
-import { Q } from './quality.js?v=14'
-import { RunnerModel } from './runnermodel.js?v=14'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=14'
-import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=14'
-import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=14'
-import { createBot, botInput } from '../shared/bot.js?v=14'
-import { drawCertificate } from './certificate.js?v=14'
+import { GAME } from '../shared/config.js?v=15'
+import { createWorld } from '../shared/track.js?v=15'
+import { buildScene } from './scene.js?v=15'
+import { FX } from './fx.js?v=15'
+import { loadSky, setAniso } from './look.js?v=15'
+import { Q } from './quality.js?v=15'
+import { RunnerModel } from './runnermodel.js?v=15'
+import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=15'
+import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=15'
+import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=15'
+import { createBot, botInput } from '../shared/bot.js?v=15'
+import { drawCertificate } from './certificate.js?v=15'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
@@ -222,7 +222,7 @@ function clearVis() { for (const v of vis.values()) { scene.remove(v.p.group); s
 const ropeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.5), new THREE.MeshBasicMaterial({ color: 0x2b2b2b }))
 ropeMesh.visible = false; scene.add(ropeMesh)
 // 一人称のワイヤー: 手元は細く、先は太く（近くで太い棒に見えない・遠くでも線が消えない）
-const ropeGeoThird = ropeMesh.geometry, ropeGeoFirst = new THREE.CylinderGeometry(0.08, 0.011, 1, 6).rotateX(Math.PI / 2).translate(0, 0, 0.5)
+const ropeGeoThird = ropeMesh.geometry, ropeGeoFirst = new THREE.CylinderGeometry(0.07, 0.005, 1, 6).rotateX(Math.PI / 2).translate(0, 0, 0.5)
 // 一人称の腕（カメラの子。壁が近くても腕は壁に埋まらないよう、いちばん手前に描く）
 const fpArm = (() => {
   const mk = (geo, color, order) => { const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.75, transparent: true, depthTest: false, depthWrite: false, fog: false })); m.renderOrder = order; m.frustumCulled = false; return m }
