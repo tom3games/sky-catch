@@ -225,7 +225,7 @@ await t('エンドレス（2026-11-03 本人「誰かを落としてしまうま
   const rd2 = createRound(world, 4, 'endless'), r2 = createRunner({ id: 'e2', spawn: { x: 0, y: 0, z: 814, yaw: 0 } }); let go = null
   while (!rd2.over && rd2.t < 120) { stepCatch(rd2, r2, dt, world); for (const e of rd2.events) if (e.t === 'gameOver') go = +rd2.t.toFixed(1); rd2.events.length = 0 }
   const rd3 = createRound(world, 5, 'endless'); rd3.n = 2; rd3.t = 0
-  expect(alive && t100 >= 100 && endlessMax(10) === 1 && endlessMax(40) === 2 && endlessMax(90) === 3 && early.every(k => k !== 'cat' && k !== 'heavy') && go !== null && rd2.missed === 1 && ENDLESS.warn[0] >= 7, JSON.stringify({ t100, alive, early, go, missed: rd2.missed }))
+  expect(alive && t100 >= 100 && endlessMax(10) === 1 && endlessMax(40) === 2 && endlessMax(90) === 2 && endlessMax(110) === 3 && endlessMax(219) === 3 && endlessMax(220) === 4 && early.every(k => k !== 'cat' && k !== 'heavy') && go !== null && rd2.missed === 1 && ENDLESS.warn[0] >= 7, JSON.stringify({ t100, alive, early, go, missed: rd2.missed }))
   return { lastedIfAllCaught: t100, endsAt: go }
 })
 await t('bot エンドレス（24回）: 下手な人も30秒より前には終わらない（最初は余裕）・何もしないと20秒前後で終わる', () => {
@@ -233,23 +233,23 @@ await t('bot エンドレス（24回）: 下手な人も30秒より前には終�
   const r = { skilled: run('skilled'), clumsy: run('clumsy'), walker: run('walker'), idle: run('idle') }
   expect(r.clumsy.under30 === 0 && r.clumsy.avg >= 40 && r.idle.max < 30, JSON.stringify(r)); return r
 })
-await t('落ち始めは重ならない（2026-11-03 本人「2人ほぼ同時に落下してくる」）: 前の人が落ち始めてから通常は3.5秒以上・エンドレスは最初3.5秒から最短2秒。2人目は1人目の近く（20m 以内）に出る', () => {
-  const gaps = { normal: 99, endless: 99, endlessEarly: 99 }, pairD = []
+await t('落ち始めは重ならない（2026-11-03 本人「2人ほぼ同時に落下してくる」）: 前の人が落ち始めてから通常は3.5秒以上・エンドレスは最初3.5秒から最短2.6秒。通常の2人目は近く（20m 以内）、エンドレスは離す（2026-11-06）', () => {
+  const gaps = { normal: 99, endless: 99, endlessEarly: 99 }, pairD = [], apartD = []
   for (const mode of ['normal', 'endless']) for (let sd = 1; sd <= 12; sd++) {
     const rd = createRound(world, sd, mode), r = createRunner({ id: 'g', spawn: { x: 0, y: 0, z: 740, yaw: 0 } }); let last = null
     while (!rd.over && rd.t < 150) {
       stepCatch(rd, r, dt, world)
       for (const e of rd.events) {
         if (e.t === 'fall') { if (last !== null) { const g = rd.t - last; gaps[mode] = Math.min(gaps[mode], g); if (mode === 'endless' && rd.t < 30) gaps.endlessEarly = Math.min(gaps.endlessEarly, g) } last = rd.t }
-        if (e.t === 'spawn') { const others = rd.fallers.filter(f => f.id !== e.id && (f.state === 'warn' || f.state === 'fall')); if (others.length) { const f0 = others[others.length - 1], f1 = rd.fallers.find(f => f.id === e.id); pairD.push(Math.hypot(f1.fx - f0.fx, f1.fz - f0.fz)) } }
+        if (e.t === 'spawn') { const others = rd.fallers.filter(f => f.id !== e.id && (f.state === 'warn' || f.state === 'fall')); if (others.length) { const f1 = rd.fallers.find(f => f.id === e.id); if (mode === 'endless') apartD.push(Math.min(...others.map(f => Math.hypot(f1.fx - f.fx, f1.fz - f.fz)))); else { const f0 = others[others.length - 1]; pairD.push(Math.hypot(f1.fx - f0.fx, f1.fz - f0.fz)) } } }
       }
       rd.events.length = 0
       if (mode === 'endless') for (const f of rd.fallers) if (f.state === 'fall' && f.y < f.top - 3) { f.state = 'saved'; f.t = 0 }   // エンドレスは全員受けとめたことにして続ける
     }
   }
   const nearShare = pairD.length ? pairD.filter(d => d <= 21).length / pairD.length : 1
-  expect(gaps.normal >= CATCH.fallGap - 0.02 && gaps.endless >= 2 - 0.02 && gaps.endlessEarly >= 3.5 - 0.4 && pairD.length > 10 && nearShare >= 0.9, JSON.stringify({ gaps, pairs: pairD.length, nearShare }))
-  return { minGapNormal: +gaps.normal.toFixed(2), minGapEndless: +gaps.endless.toFixed(2), pairs: pairD.length, near20m: Math.round(nearShare * 100) + '%' }
+  expect(gaps.normal >= CATCH.fallGap - 0.02 && gaps.endless >= ENDLESS.fallGap[1] - 0.02 && gaps.endlessEarly >= 3.5 - 0.4 && pairD.length > 10 && nearShare >= 0.9 && apartD.length > 10 && Math.min(...apartD) >= ENDLESS.apartMin - 2 && apartD.filter(d => d >= ENDLESS.apart - 2).length / apartD.length >= 0.8, JSON.stringify({ gaps, pairs: pairD.length, nearShare, apartMin: Math.min(...apartD), apartN: apartD.length, apartFar: apartD.filter(d => d >= ENDLESS.apart - 2).length }))
+  return { minGapNormal: +gaps.normal.toFixed(2), minGapEndless: +gaps.endless.toFixed(2), pairs: pairD.length, near20m: Math.round(nearShare * 100) + '%', endlessApartMin: Math.round(Math.min(...apartD)), endlessApartFar: Math.round(apartD.filter(d => d >= ENDLESS.apart - 2).length / apartD.length * 100) + '%' }
 })
 await t('bot（24回ずつ）: 下手な人が救う割合は3〜5割（2026-11-03「簡単になりすぎ」で 56% から4割前後に）・ワイヤーを使う人の点は走るだけ以上・何もしないと0人', () => {
   const avg = k => { let s = 0, sv = 0, sp = 0; for (let i = 1; i <= 24; i++) { const g = play(k, i); s += g.score; sv += g.saved; sp += g.spawned } return { score: Math.round(s / 24), saved: +(sv / 24).toFixed(1), rate: +(sv / sp).toFixed(2) } }

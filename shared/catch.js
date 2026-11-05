@@ -30,10 +30,11 @@ export const CATCH = {
 // エンドレス（2026-11-03 本人「誰かを落としてしまうまでエンドレスでできるモード」）: 1人でも地面に落ちたら終わり。時間とともに間隔が詰まり、同時に落ちる人数が増える
 export const ENDLESS = {
   gap: [2.6, 0.9], gapK: 0.016,      // 片付いてから次まで: 2.6秒から 1秒に 0.016 秒ずつ詰まる（最短 0.9）
-  active: [[0, 1], [30, 2], [75, 3], [140, 4]],   // [秒, 同時の上限]。最初の30秒は1人ずつ
+  active: [[0, 1], [40, 2], [110, 3], [220, 4]],   // [秒, 同時の上限]。2026-11-06 本人「難易度一気に上がるのだるい」でゆっくり増やす
   warn: [7.5, 4.5], warnK: 0.015,    // ぐらつく時間: 最初は 7.5秒（余裕）から少しずつ短く
   near: [45, 0.3],                   // 次の人が出る距離の上限: 最初は 45m 以内、1秒ごとに 0.3m 広がる（80m まで）
-  fallGap: [3.5, 2], fallGapK: 0.01,   // 落ち始めの最低間隔: 3.5秒から少しずつ詰めて最短2秒
+  fallGap: [3.5, 2.6], fallGapK: 0.006,   // 落ち始めの最低間隔: 3.5秒から少しずつ詰めて最短2.6秒
+  apart: 70, apartMin: 45,           // 同時に待っている人どうしの距離（2026-11-06 本人「近場で4人ほぼ同時は萎える。場所を離して」）。70m を探し、無ければ 45m
   easyUntil: 30                      // 最初の30秒は落ち方の速い種類（猫・ふくよかな人）を出さない
 }
 
@@ -125,7 +126,7 @@ function pickNear(world, rnd, f0, others) {
   }
   return null
 }
-function pickSpot(world, r, rnd, others, nearMax = CATCH.nearMax) {
+function pickSpot(world, r, rnd, others, nearMax = CATCH.nearMax, apart = 30) {
   const blds = world._catchBlds || (world._catchBlds = world.colliders.filter(o => o.kind === 'building' && o.y1 >= CATCH.hMin + 4))
   for (let g = 0; g < 1200; g++) {
     const far = g < 400 ? nearMax : g < 800 ? nearMax * 1.6 : nearMax * 2.5   // 近くに高い建物が無い時は遠くまで探す
@@ -140,7 +141,7 @@ function pickSpot(world, r, rnd, others, nearMax = CATCH.nearMax) {
     // 前が道（落ちる先が開けている）
     if (world.surfaceAt(ex + nx * 7, ez + nz * 7) !== 'road' || world.surfaceAt(ex + nx * 12, ez + nz * 12) !== 'road') continue
     if (world.colliders.some(b => b !== o && b.kind === 'building' && Math.abs(ex + nx * 6 - b.cx) < b.hw + 1 && Math.abs(ez + nz * 6 - b.cz) < b.hl + 1)) continue
-    if (others.some(f => Math.hypot(f.x - ex, f.z - ez) < 30)) continue
+    if (others.some(f => Math.hypot(f.x - ex, f.z - ez) < apart)) continue
     const h = Math.min(o.y1 - 2, CATCH.hMin + rnd() * (CATCH.hMax - CATCH.hMin))
     return { ex, ez, nx, nz, top: h, roof: o.y1, bld: o }
   }
@@ -158,7 +159,12 @@ export function createRound(world, seed = 1, mode = 'normal') {
 // 落ちてくる人: state = warn（ベランダのふちでぐらつく）→ fall（落ちている）→ carried（抱えられている）/ landed（地面に落ちた）/ saved
 function spawn(rd, world, r) {
   const act = rd.fallers.filter(f => f.state === 'warn' || f.state === 'fall')
-  const sp = (act.length && pickNear(world, rd.rnd, act[act.length - 1], act)) || pickSpot(world, r, rd.rnd, act, rd.mode === 'endless' ? Math.min(CATCH.nearMax, ENDLESS.near[0] + rd.t * ENDLESS.near[1]) : CATCH.nearMax)
+  let sp
+  if (rd.mode === 'endless') {
+    // エンドレスは近くに固めない（通常モードの「2人目は近く」は使わない）
+    const far = Math.min(CATCH.nearMax, ENDLESS.near[0] + rd.t * ENDLESS.near[1])
+    sp = pickSpot(world, r, rd.rnd, act, far, act.length ? ENDLESS.apart : 30) || (act.length ? pickSpot(world, r, rd.rnd, act, far, ENDLESS.apartMin) : null)
+  } else sp = (act.length && pickNear(world, rd.rnd, act[act.length - 1], act)) || pickSpot(world, r, rd.rnd, act, CATCH.nearMax)
   if (!sp) return false
   const kind = pickKind(rd), K = KINDS[kind], KL = KIND_LINES[kind]
   const reason = Math.floor(rd.rnd() * (KL ? KL.why.length : REASONS.length))
