@@ -43,3 +43,8 @@
 - snd/city_street_loop.wav: Sunday in the city street noise 1 / cori / Public domain（Wikimedia Commons。静かな通りの22.5秒ループ。街の環境音）
 - snd/cat_mew1.mp3: Cat purr / meow (cat_mewfood) / Kerzoven / CC0（OpenGameArt cat-purr-meow。本物の猫の録音）
 - snd/cat_mew2.mp3: Cat purr / meow (cat_mewpurr) / Kerzoven / CC0（同上）
+
+## フォント
+- fonts/yuji.woff2: Yuji Syuku / Kinuta Font Factory / SIL OFL 1.1（使う文字だけに切り詰め）
+- fonts/klee600.woff2: Klee One / Fontworks / SIL OFL 1.1（同）
+- fonts/biz400.woff2, fonts/biz700.woff2: BIZ UDPGothic / Motoya, MORISAWA / SIL OFL 1.1（同）

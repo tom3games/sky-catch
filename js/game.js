@@ -5,10 +5,10 @@ import { GAME } from '../shared/config.js?v=19'
 import { createWorld } from '../shared/track.js?v=19'
 import { buildScene } from './scene.js?v=19'
 import { FX } from './fx.js?v=19'
-import { loadSky, setAniso } from './look.js?v=19'
+import { loadSky, setAniso, startLateTextures, texState } from './look.js?v=19'
 import { Q } from './quality.js?v=19'
 import { RunnerModel } from './runnermodel.js?v=19'
-import { CharRunnerModel, Faller, loadCharAssets, charAssets } from './charmodel.js?v=19'
+import { CharRunnerModel, Faller, loadCharAssets, loadCustomers, charAssets } from './charmodel.js?v=19'
 import { createRunner, stepRunner, findAnchor, rayHit, floorAt, RUN } from '../shared/runner.js?v=19'
 import { CATCH, KINDS, REASONS, LINES, createRound, stepCatch, urgent, active, nearestMat, rankOf, fallTime, reasonText, kindLine } from '../shared/catch.js?v=19'
 import { createBot, botInput } from '../shared/bot.js?v=19'
@@ -16,15 +16,20 @@ import { drawCertificate } from './certificate.js?v=19'
 
 const $ = id => document.getElementById(id)
 // ---------------------------------------------------------------- 読み込みの進み具合（ロード画面）
-const LM = THREE.DefaultLoadingManager, bootP = { done: 0, total: 0 }
+const LM = THREE.DefaultLoadingManager, bootP = { done: 0, total: 0, sky: false, fonts: false }
+// 題の看板の字。遅い回線でも 2 秒で先へ進む（届けば差し替わる）
+{
+  const fin = () => { bootP.fonts = true }, F = document.fonts
+  if (F && F.load) Promise.all(['700 16px "BIZ UDPGothic"', '600 16px "Klee One"'].map(f => F.load(f).catch(() => {}))).then(fin); else fin()
+  setTimeout(fin, 2000)
+}
 LM.onStart = LM.onProgress = (url, a, b) => { bootP.done = a; bootP.total = b; bootP.at = performance.now(); window.__bootSet && window.__bootSet(0.2 + 0.8 * (b ? a / b : 0)) }
 function bootWatch(onReady) {
   const t0 = performance.now()
   const tick = () => {
-    // three は同じ画像を何体ぶんも読む時に数が合わなくなることがある（72% で止まった）。人物が読めて、1.5秒新しい読み込みが無ければ終わりとみなす
-    const quiet = performance.now() - (bootP.at || 0) > 1500
-    const done = bootP.total > 0 && (bootP.done >= bootP.total || quiet) && (charAssets.ready || charAssets.failed)
-    if (done || performance.now() - t0 > 40000) {   // 40 秒たっても終わらない時は遊べる所まで進める
+    // 最初の画面に要るのは空と主人公と字だけ。落ちてくる人、床と壁の絵、音は裏で順に読む
+    const done = (charAssets.ready || charAssets.failed) && bootP.sky && bootP.fonts
+    if (done || performance.now() - t0 > 12000) {   // 遅い回線でも 12 秒で必ず遊べる所まで進める
       window.__bootDone = true; window.__bootSet && window.__bootSet(1)
       const b = $('boot'); b.classList.add('out'); setTimeout(() => b.classList.add('hidden'), 380)
       onReady(); return
@@ -125,6 +130,8 @@ function applyLang() {
 
 // ---------------------------------------------------------------- 音（録音素材だけ）
 Snd.muted = store.get('catch.mute') === '1'
+// 効果音のあとに読む順。遊ぶ間に鳴る物から（題の BGM は題の画面で音を出した時だけ読む）
+Snd.pre = ['snd/bgm_play.mp3', 'snd/wind_loop.wav', 'snd/city_street_loop.wav']
 Snd.def({
   wire: ['snd/swish-1.mp3', 'snd/swish-2.mp3', 'snd/swish-3.mp3'], hook: ['snd/metalClick.mp3', 'snd/metal_02.mp3'],
   land: ['snd/footstep_01.mp3', 'snd/footstep_02.mp3'], bonk: ['snd/thwack-01.mp3', 'snd/thwack-03.mp3'],
@@ -157,7 +164,7 @@ sun.shadow.normalBias = 0.04; sun.shadow.bias = -0.0004
 scene.add(sun, sun.target)
 const hemi = new THREE.HemisphereLight(0xc4d8ff, 0x6a5a48, 1.8)
 scene.add(hemi)
-loadSky(renderer, scene, sun, () => { hemi.intensity = 0.4 })
+loadSky(renderer, scene, sun, () => { hemi.intensity = 0.4; bootP.sky = true }, () => { bootP.sky = true })
 const camera = new THREE.PerspectiveCamera(64, 1, 0.3, 2400)
 const world = createWorld('city')
 const built = buildScene(scene, world)
@@ -218,6 +225,8 @@ function visOf(f) {
   }
   return v
 }
+// 落ちてくる人の見た目が届いたら、仮の体だけ入れ替える（遊んでいる途中でも。受けとめた人や吹き出しはそのまま）
+function refreshStands() { for (const v of vis.values()) if (!v.p.ok) { const p = new Faller(v.p.look, v.p.kind); if (!p.ok) continue; v.p.group.parent && v.p.group.parent.remove(v.p.group); v.p = p } }
 function clearVis() { for (const v of vis.values()) { scene.remove(v.p.group); scene.remove(v.b) } vis.clear(); $('bubbles').innerHTML = ''; bubEls.clear() }
 // ワイヤー
 const ropeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.5), new THREE.MeshBasicMaterial({ color: 0x2b2b2b }))
@@ -898,6 +907,7 @@ function render(dt) {
 
 // ---------------------------------------------------------------- 検証用の窓口
 window.sky = {
+  texState, charAssets, get vis() { return vis },
   get mode() { return mode }, marks: () => markPool.filter(m => m.g.visible).map(m => ({ id: m.id, beamX: m.g.position.x, beamZ: m.g.position.z, beamBottom: m.g.position.y, beamTop: m.g.position.y + m.col.scale.y, beamOpacity: m.mat.opacity, haloX: m.halo.position.x, haloY: m.halo.position.y, haloZ: m.halo.position.z, haloSize: m.halo.scale.x, ringX: m.ring.position.x, ringZ: m.ring.position.z, ringY: m.ring.position.y })), markPool, renderer, scene, CATCH, headSign, PITCH_MIN, log, get hitStop() { return hitStop }, get flashA() { return flashA }, get fovKick() { return fovKick }, get me() { return me }, get rd() { return rd }, CATCH, RUN, world, camera, touchMode, cam,
   get camAir() { return cam.air }, get view() { return viewMode }, setView, get fpOn() { return fpOn() }, fpArm, ropeMesh, aimMark,
   start: seed => startRound(seed), setMode: m => { gameMode = m; showMode() }, get gameMode() { return gameMode }, toTitle, showResult, setLang: l => { lang = l; applyLang() }, get lang() { return lang },
@@ -912,4 +922,9 @@ applyLang()
 toTitle()
 requestAnimationFrame(frame)
 // ロード画面は読み込みが全部終わってから消す（テクスチャ・人物の GLB を three の読み込み数で数える）
-bootWatch(() => { window.__catchReady = true })
+bootWatch(() => {
+  window.__catchReady = true
+  // 感謝状の筆文字は画面の文字に使わないので、ここで先に読む（Canvas は読んでくれない）
+  if (document.fonts && document.fonts.load) document.fonts.load('16px "Yuji Syuku"', '感謝状').catch(() => {})
+  loadCustomers().then(() => { refreshStands(); return startLateTextures() }).then(() => { window.__assetsDone = true; Snd.prefetch() })
+})

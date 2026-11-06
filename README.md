@@ -8,3 +8,6 @@ https://tom3games.github.io/sky-catch/
 - 仕様の正本: `~/Desktop/claudecode/ideas/sky-catch.md`
 - 検証: `node verify.mjs`（テスト中は無音）／釣り合い: `node tools/sim.mjs 12`
 - 素材と出所: CREDITS.md
+
+## 公開物を作る
+js/ や shared/ を直したら `node tools/build.mjs`（verify.mjs も最初に実行する）。index.html は dist/game.js を読む。文字を足したら `~/tools/pyimg/bin/python tools/fonts.py <元のttfのフォルダ>`。読み込みの確認だけなら `node tools/slowrun.mjs`。

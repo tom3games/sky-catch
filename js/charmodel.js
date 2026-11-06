@@ -29,9 +29,8 @@ export function loadCharAssets() {
   if (A.loading) return A.loading
   const L = new GLTFLoader()
   const get = f => new Promise((ok, ng) => L.load(BASE + f, ok, undefined, ng))
-  A.loading = Promise.all([get('Ranger.glb'), get('Rig_Medium_General.glb'), get('Rig_Medium_MovementBasic.glb'),
-    ...['male-d', 'female-b', 'male-e', 'female-d', 'male-a', 'female-f'].map(n => get('character-' + n + '.glb'))])
-    .then(([r, g1, g2, ...cs]) => {
+  A.loading = Promise.all([get('Ranger.glb'), get('Rig_Medium_General.glb'), get('Rig_Medium_MovementBasic.glb')])
+    .then(([r, g1, g2]) => {
       r.scene.traverse(o => {
         if (o.isMesh) {
           o.castShadow = true; o.frustumCulled = false
@@ -42,12 +41,20 @@ export function loadCharAssets() {
       })
       A.ranger = r.scene
       for (const cl of [...g1.animations, ...g2.animations]) A.clips[cl.name] = cl
-      A.custs = cs.map(c => ({ scene: c.scene, clips: c.animations }))
-      for (const c of A.custs) c.scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false } })
       A.ready = true
       return A
     }).catch(e => { A.failed = true; console.warn('char load failed', e); return A })
   return A.loading
+}
+
+// 落ちてくる人の見た目。主人公のあと、ロード画面が消えてから読む（届くまでは仮の体で受けとめられる）
+export function loadCustomers() {
+  const L = new GLTFLoader(), get = f => new Promise(ok => L.load(BASE + f, ok, undefined, () => ok(null)))
+  return Promise.all(['male-d', 'female-b', 'male-e', 'female-d', 'male-a', 'female-f'].map(n => get('character-' + n + '.glb'))).then(cs => {
+    A.custs = cs.filter(Boolean).map(c => ({ scene: c.scene, clips: c.animations }))
+    for (const c of A.custs) c.scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false } })
+    return A.custs.length
+  })
 }
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3()
@@ -193,7 +200,7 @@ export class Customer {
     this.cur = -1; this.t = 0
   }
   show(i) {
-    if (!A.ready || !A.custs.length) return false
+    if (!A.custs.length) return false
     i = ((i % A.custs.length) + A.custs.length) % A.custs.length
     if (i === this.cur) return true
     for (const s of this.slots) s.root.visible = false
@@ -277,12 +284,12 @@ function makeUmbrella(color) {
 
 export class Faller {
   constructor(look, kind = 'normal') {
-    this.group = new THREE.Group(); this.t = Math.random() * 10; this.ok = false; this.kind = kind
+    this.group = new THREE.Group(); this.t = Math.random() * 10; this.ok = false; this.kind = kind; this.look = look
     this.body = new THREE.Group(); this.group.add(this.body)
     if (kind === 'cat') { this.prop = makeCat(); this.body.add(this.prop); this.ok = true; return }
     if (kind === 'ittan') { this.prop = makeIttan(); this.body.add(this.prop); this.ok = true; return }
     if (kind === 'karakasa') { this.prop = makeKarakasa(); this.body.add(this.prop); this.ok = true; return }
-    if (!A.ready || !A.custs.length) return
+    if (!A.custs.length) return
     const c = A.custs[((look % A.custs.length) + A.custs.length) % A.custs.length], root = skClone(c.scene)
     const box = new THREE.Box3().setFromObject(root); const k = 1.35 / (box.max.y - box.min.y)
     root.scale.setScalar(k); root.position.y = -box.min.y * k

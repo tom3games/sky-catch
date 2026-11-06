@@ -1,3 +1,7 @@
+@font-face{font-family:"Yuji Syuku";font-weight:400;font-display:swap;src:url(fonts/yuji.woff2) format("woff2")}
+@font-face{font-family:"BIZ UDPGothic";font-weight:400;font-display:swap;src:url(fonts/biz400.woff2) format("woff2")}
+@font-face{font-family:"BIZ UDPGothic";font-weight:700;font-display:swap;src:url(fonts/biz700.woff2) format("woff2")}
+@font-face{font-family:"Klee One";font-weight:600;font-display:swap;src:url(fonts/klee600.woff2) format("woff2")}
 :root{
   --ink:#16140f; --yel:#f2c230; --yel2:#e0aa12; --orange:#f07a1d; --orange2:#a9480c; --navy:#16213a;
   --steel1:#e9ecee; --steel2:#a6adb3; --steel3:#6f777e; --amber:#ffb23a; --paper:#fbf6e9; --red:#c3271c;

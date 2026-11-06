@@ -2,7 +2,7 @@
 // 2026-11-02 外部レビュー「都心の歩道に杉が1本だけ立っている」で杉から変えた。
 // 全部を InstancedMesh 2つで描く（何千本でも描画は2回）。
 import * as THREE from 'three'
-import { tex } from './look.js?v=19'
+import { tex, lateTexture } from './look.js?v=19'
 import { Q } from './quality.js?v=19'
 
 // 葉の絵: 下から上へ、垂れた枝の房を重ねて細長い円錐の樹冠を描く
@@ -61,7 +61,7 @@ function crownGeometry() {
 export function buildForest(scene, spots) {
   const n = spots.length
   const trunkGeo = new THREE.CylinderGeometry(0.16, 0.34, 1, 7, 1, true).translate(0, 0.5, 0)
-  const bark = new THREE.TextureLoader().load(`assets/${Q.tex}/japanese_cedar_bark_diff.webp`); bark.colorSpace = THREE.SRGBColorSpace; bark.wrapS = bark.wrapT = THREE.RepeatWrapping; bark.repeat.set(1, 6)
+  const bark = lateTexture(`assets/${Q.tex}/japanese_cedar_bark_diff.webp`, '#483523'); bark.colorSpace = THREE.SRGBColorSpace; bark.wrapS = bark.wrapT = THREE.RepeatWrapping; bark.repeat.set(1, 6)
   const trunkMat = new THREE.MeshStandardMaterial({ map: bark, roughness: 0.95, color: 0xb8a898 })
   const crownMat = new THREE.MeshStandardMaterial({ map: crownTexture(), alphaTest: 0.45, alphaToCoverage: Q.msaa > 0, side: THREE.FrontSide, roughness: 0.9, metalness: 0 })
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, n)

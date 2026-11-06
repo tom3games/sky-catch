@@ -8,8 +8,39 @@ import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js
 import { ShaderPass } from '../vendor/jsm/postprocessing/ShaderPass.js'
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js'
 
-const loader = new THREE.TextureLoader()
 const cache = new Map()
+// 床や壁の絵は最初の画面を待たせない。届くまでは平均の色で塗っておき、準備完了の後に順に読む（読めなくても黒くならない）
+const AVG = { asphalt_02: '#5b5a55', concrete_panels: '#97846e', concrete_wall_004: '#757364', corrugated_iron: '#aab3ae', dirt: '#63533e', forest_leaves_02: '#8e713a', japanese_cedar_bark: '#483523', plastered_wall_04: '#8d8a87', rectangular_facade_tiles: '#59564f', red_brick_03: '#6a544b', rock_face: '#614631', rocky_terrain_02: '#504f1b' }
+const FLAT = { nor_gl: '#8080ff', rough: '#d0d0d0' }
+const lateQ = []
+export const texState = { queued: 0, loaded: 0, failed: 0, done: false }
+let release, started = false
+const gate = new Promise(r => { release = r })
+export const afterBoot = () => gate     // ロード画面が消えた後に読む物はこれを待つ
+function flat(color) { const c = document.createElement('canvas'); c.width = c.height = 2; const x = c.getContext('2d'); x.fillStyle = color; x.fillRect(0, 0, 2, 2); return c }
+export function lateTexture(url, color) {
+  const t = new THREE.Texture(flat(color)); t.needsUpdate = true
+  lateQ.push({ t, url }); texState.queued++
+  return t
+}
+function loadOne({ t, url }) {
+  return new Promise(ok => {
+    const im = new Image()
+    im.onerror = () => { texState.failed++; ok() }
+    im.onload = () => {
+      const put = () => { t.dispose(); t.image = im; t.needsUpdate = true; texState.loaded++; ok() }   // 大きさが変わるので一度捨てて作り直す
+      im.decode ? im.decode().then(put, put) : put()
+    }
+    im.src = url
+  })
+}
+// 6本ずつ順に読む。終わるか、遅くても待ちが止まらないように 25 秒で次へ進む
+export function startLateTextures() {
+  if (started) return Promise.resolve(); started = true; release()
+  const run = async () => { while (lateQ.length) await loadOne(lateQ.shift()) }
+  const all = Promise.all(Array.from({ length: 6 }, run))
+  return Promise.race([all, new Promise(r => setTimeout(r, 25000))]).then(() => { texState.done = true })
+}
 let maxAniso = 8
 
 export function setAniso(renderer) { maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy()) }
@@ -18,7 +49,7 @@ export function setAniso(renderer) { maxAniso = Math.min(8, renderer.capabilitie
 export function tex(name, map, srgb = false) {
   const key = name + map
   if (cache.has(key)) return cache.get(key)
-  const t = loader.load(`assets/${Q.tex}/${name}_${map}.webp`)
+  const t = lateTexture(`assets/${Q.tex}/${name}_${map}.webp`, FLAT[map] || AVG[name] || '#808080')
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.anisotropy = maxAniso
   if (srgb) t.colorSpace = THREE.SRGBColorSpace
@@ -35,7 +66,7 @@ export function pbr(name, { repeat = 1, color = 0xffffff, roughness = 1, normalS
 // ---------------------------------------------------------------- 空と太陽
 // 空は実写（Poly Haven の HDRI をトーンマップした画像。20〜55KB）。太陽の向きは元の HDR から求めた値
 export const SKY_SUN = [0.5546, 0.742, 0.3767]
-export function loadSky(renderer, scene, sun, onReady) {
+export function loadSky(renderer, scene, sun, onReady, onFail) {
   new THREE.TextureLoader().load(`assets/hdri/${Q.sky}.webp`, sky => {
     sky.mapping = THREE.EquirectangularReflectionMapping
     sky.colorSpace = THREE.SRGBColorSpace
@@ -48,7 +79,7 @@ export function loadSky(renderer, scene, sun, onReady) {
     const dir = new THREE.Vector3(...SKY_SUN).normalize()
     sun.userData.dir = dir
     onReady && onReady(dir)
-  })
+  }, undefined, () => { onFail && onFail() })
 }
 
 // ---------------------------------------------------------------- 後処理

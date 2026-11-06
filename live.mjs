@@ -14,7 +14,7 @@ for (const [name, bt, opts] of [['chromium', chromium, {}], ['webkit', webkit, {
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()) })
   p.on('requestfailed', r => errs.push('fail ' + r.url()))
   await p.goto(URL0 + '?t=' + Date.now(), { waitUntil: 'networkidle' })
-  await p.waitForFunction(() => window.__catchReady, null, { timeout: 15000 })
+  await p.waitForFunction(() => window.__catchReady && window.__assetsDone, null, { timeout: 30000 })
   // 遊びの通し: 出動 → 壁に張り付いて受けとめ → 救護マットで引き渡し → 感謝状
   if (opts.hasTouch) await p.tap('#btnStart'); else await p.click('#btnStart')
   await p.waitForTimeout(800)

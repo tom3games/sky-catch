@@ -5,6 +5,7 @@
 // 型: 0 事務所（コンクリート板）/ 1 タイル張りのマンション / 2 ガラスのビル / 3 レンガ
 import * as THREE from 'three'
 import { Q } from './quality.js?v=19'
+import { afterBoot } from './look.js?v=19'
 
 const UP_W = 6, UP_H = 7.2, GF_H = 4.5
 const WALLS = {
@@ -15,6 +16,7 @@ const WALLS = {
   iron: ['corrugated_iron', 1.12]
 }
 
+export const facadeState = { done: false }
 export function createFacade() {
   const S = Q.tex === 'tex512' ? 1024 : 2048
   const cw = S / 4, ch = S / 4
@@ -30,9 +32,9 @@ export function createFacade() {
   let imgs = null
   draw()
   // 実写の壁を読み込んだら描き直す
-  const load = (name, m) => new Promise(res => { const u = `assets/${Q.tex}/${name}_${m}.webp`, LM = THREE.DefaultLoadingManager; LM.itemStart(u); const im = new Image(); im.onload = () => { LM.itemEnd(u); res(im) }; im.onerror = () => { LM.itemError(u); LM.itemEnd(u); res(null) }; im.src = u })   // ロード画面の数に入れる
-  Promise.all(Object.entries(WALLS).map(async ([k, [name]]) => [k, { a: await load(name, 'diff'), n: await load(name, 'nor_gl'), r: await load(name, 'rough') }]))
-    .then(list => { imgs = Object.fromEntries(list); draw(); for (const t of Object.values(tex)) t.needsUpdate = true })
+  const load = (name, m) => new Promise(res => { const u = `assets/${Q.tex}/${name}_${m}.webp`, im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = u })
+  afterBoot().then(() => Promise.all(Object.entries(WALLS).map(async ([k, [name]]) => [k, { a: await load(name, 'diff'), n: await load(name, 'nor_gl'), r: await load(name, 'rough') }]))
+    .then(list => { imgs = Object.fromEntries(list); draw(); for (const t of Object.values(tex)) t.needsUpdate = true; facadeState.done = true }))
 
   // マス (col,row) を、左下原点・メートル単位（W x H）で描けるようにする
   function cell(col, row, W, H, span = 1) {

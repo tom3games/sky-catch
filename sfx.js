@@ -9,6 +9,7 @@
 //   検証は Snd.played（鳴らした回数）と Snd.level()
 const Snd = {
   ctx: null, muted: false, files: {}, bufs: {}, last: {}, played: {}, loops: {},
+  raw: {}, bad: {}, busy: 0, busyBig: 0, MAX: 8, MAXBIG: 2, pre: [], prefetching: false,   // 読む順の管理（効果音 → 今のループ → 先読み）
   def(map) { for (const k in map) this.files[k] = [].concat(map[k]); if (this.ctx) this.load() },
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return }
@@ -27,13 +28,32 @@ const Snd = {
     } catch (e) { this.ctx = null }
   },
   ir(sec) { const c = this.ctx, n = Math.floor(c.sampleRate * sec), b = c.createBuffer(2, n, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3) } return b },
-  async load() {
-    const urls = new Set(Object.values(this.files).flat().concat(Object.values(this.loops).filter(Boolean).map(l => l.url)))
-    await Promise.all([...urls].filter(u => u && !this.bufs[u]).map(async u => {
-      this.bufs[u] = 'loading'
-      try { const ab = await (await fetch(u)).arrayBuffer(); this.bufs[u] = await new Promise((ok, ng) => this.ctx.decodeAudioData(ab, ok, ng)) } catch (e) { delete this.bufs[u] }   // 古い Safari はコールバック形しか無い
-    }))
+  // 全部いっぺんに読まず、本数を決めて順に読む。load() は順番待ちを進めるだけで、呼ぶ時に鳴らす物が変わっていれば順番も変わる
+  load() { if (!this._lt) this._lt = setTimeout(() => { this._lt = 0; this.pump() }, 0) },
+  prefetch() { if (navigator.connection && navigator.connection.saveData) return; this.prefetching = true; this.load() },
+  queue() {
+    const fx = Object.values(this.files).flat(), loops = Object.values(this.loops).filter(Boolean).map(l => l.url)
+    const rank = u => { const i = this.pre.indexOf(u); return i < 0 ? -1 : i }
+    const later = loops.concat(this.prefetching ? this.pre : []).sort((a, b) => rank(a) - rank(b))
+    // 音を鳴らせるようになるまでは、効果音と先読みだけ取りに行く（題の BGM を無駄に読まない）
+    const list = this.ctx ? fx.concat(later) : this.prefetching ? fx.concat(this.pre) : []
+    return [...new Set(list)].filter(u => u && !this.bufs[u] && (this.bad[u] || 0) < 2)
   },
+  pump() {
+    if (this.ctx) for (const u in this.raw) { const ab = this.raw[u]; delete this.raw[u]; this.decode(u, ab) }
+    const fx = new Set(Object.values(this.files).flat())   // 短い効果音は並べて、長いループは2本ずつ読む
+    for (const u of this.queue()) {
+      const big = !fx.has(u)
+      if (this.busy >= this.MAX) break
+      if (big && this.busyBig >= this.MAXBIG) continue
+      this.busy++; if (big) this.busyBig++; this.bufs[u] = 'loading'
+      fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer() })
+        .then(ab => { if (this.ctx) this.decode(u, ab); else this.raw[u] = ab })
+        .catch(() => { delete this.bufs[u]; this.bad[u] = (this.bad[u] || 0) + 1 })
+        .then(() => { this.busy--; if (big) this.busyBig--; this.load() })
+    }
+  },
+  decode(u, ab) { new Promise((ok, ng) => this.ctx.decodeAudioData(ab, ok, ng)).then(b => { this.bufs[u] = b }, () => { delete this.bufs[u]; this.bad[u] = 2 }) },
   setMute(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 0.9 },
   now() { return this.ctx ? this.ctx.currentTime : 0 },
   pick(name) { const a = this.files[name]; if (!a || !a.length) return null; if (a.length === 1) return a[0]; let i; do { i = Math.floor(Math.random() * a.length) } while (a.length > 1 && a[i] === this.last[name]); this.last[name] = a[i]; return a[i] },
@@ -53,7 +73,7 @@ const Snd = {
     if (old && old.node) { old.g.gain.cancelScheduledValues(t); old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0.0001, t + fade); old.node.stop(t + fade + 0.05) }
     if (!url) return
     const start = () => {
-      const buf = this.bufs[url]; if (!buf || buf === 'loading') return setTimeout(start, 120)
+      if ((this.bad[url] || 0) >= 2) return; const buf = this.bufs[url]; if (!buf || buf === 'loading') return setTimeout(start, 120)
       if (this.loops[slot] && this.loops[slot].url !== url) return
       const s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; s.loop = true; g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.linearRampToValueAtTime(vol, c.currentTime + fade)
       s.connect(g); g.connect(this.bed); s.start(); this.loops[slot] = { url, vol, node: s, g }; this.played['loop:' + slot] = (this.played['loop:' + slot] || 0) + 1

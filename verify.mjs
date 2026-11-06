@@ -7,8 +7,10 @@ import { createWorld } from './shared/track.js'
 import { createRunner, stepRunner, RUN } from './shared/runner.js'
 import { CATCH, KINDS, KIND_KEYS, ENDLESS, createRound, stepCatch, endlessMax, kindLine, reasonText } from './shared/catch.js'
 import { play } from './tools/sim.mjs'
+import { slowTests } from './tools/slowload.mjs'
 const ROOT = import.meta.dirname
 mkdirSync(ROOT + '/shots', { recursive: true })
+execFileSync(process.execPath, ['tools/build.mjs'], { cwd: ROOT, stdio: 'inherit' })   // js/ を直した分を公開物に入れる
 const PORT = 5394
 const server = spawn(process.execPath, ['server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) } })
 await new Promise(r => setTimeout(r, 400))
@@ -29,8 +31,8 @@ async function open(browser, opts = {}) {
   const p = await ctx.newPage(); p.errs = []
   p.on('pageerror', e => p.errs.push('pageerror ' + e.message))
   p.on('console', m => { if (m.type() === 'error' && !/GL Driver|WebGL|GPU stall/.test(m.text())) p.errs.push('console ' + m.text()) })
-  p.on('requestfailed', r => { if (!/fonts\.(googleapis|gstatic)/.test(r.url())) p.errs.push('reqfail ' + r.url()) })
-  await p.goto(URL0); await p.waitForFunction(() => window.__catchReady, null, { timeout: 60000 })
+  p.on('requestfailed', r => { if (!/ABORTED|cancelled/i.test((r.failure() || {}).errorText || '')) p.errs.push('reqfail ' + r.url()) })   // 開き直した時に裏の読み込みが取り消されるのは失敗ではない
+  await p.goto(URL0); await p.waitForFunction(() => window.__catchReady && window.__assetsDone, null, { timeout: 60000 })
   return p
 }
 const overflow = p => p.evaluate(() => {
@@ -257,10 +259,9 @@ await t('bot（24回ずつ）: 下手な人が救う割合は3〜5割（2026-11-
   expect((sk.score + cl.score) / 2 >= wk.score * 0.9 && id.saved === 0 && cl.rate >= 0.3 && cl.rate <= 0.5 && sk.rate < 0.47, { sk, cl, wk, id })   // 走るだけ bot も壁を登って受けとめる。地面で受けとめた分は点が少ない
   return { skilled: sk, clumsy: cl, walker: wk, idle: id }
 })
-await t('先読み（modulepreload）は importmap より後にある（前だと Chrome で "three" が解決できず起動しない。2026-11-03 WIRE ESCAPE で公開版が止まった）', async () => {
+await t('本体は1ファイルにまとまり、外部のフォントや importmap に頼らない', async () => {
   const h = (await import('node:fs')).readFileSync(ROOT + '/index.html', 'utf8')
-  const im = h.indexOf('type="importmap"'), mp = h.indexOf('rel="modulepreload"')
-  expect(im > 0 && (mp < 0 || mp > im), JSON.stringify({ im, mp })); return { im, mp }
+  expect(/type="module" src="dist\/game\.js\?v=\d+"/.test(h) && !h.includes('importmap') && !h.includes('googleapis') && !/href="js\//.test(h), 'index.html'); return 'ok'
 })
 await t('地面ワイヤー（2026-11-03 本人「空中に浮いてる間は地面にもワイヤーつけて加速」「地面をちゃんとタップしなあかん感じに」）: 地面に立っている時は地面に掛からない／空中では掛かってすぐ速くなり（0.3秒で25m/s）、近く（4m）で外れる。地面の近くで外れても着地しても跳ね返らない／1ステップで最高速×dt より動かない（瞬間移動しない）／ワイヤーボタン（狙いなし）では空中でも地面に掛からない', () => {
   const DT = 1 / 60
@@ -326,7 +327,7 @@ await t('ロード画面（2026-11-03 本人「開いた最初に、いい感じ
 })
 await t('起動失敗の保険: 本体のファイルが読めないと、9秒で原因の表示が出る', async () => {
   const ctx = await browser.newContext({ locale: 'ja-JP', viewport: { width: 390, height: 844 } }); await muteContext(ctx)
-  await ctx.route('**/js/fx.js*', route => route.fulfill({ status: 404, body: 'nope' }))
+  await ctx.route('**/dist/game.js*', route => route.fulfill({ status: 404, body: 'nope' }))
   const q = await ctx.newPage(); await q.goto(URL0)
   await q.waitForSelector('#boot-err', { timeout: 15000 }).catch(() => null)
   const r = await q.evaluate(() => { const d = document.getElementById('boot-err'); return { shown: !!d, text: d ? d.textContent.slice(0, 80) : '' } })
@@ -628,7 +629,9 @@ for (const [w, h, name] of SIZES) {
 await browser.close()
 
 // ---------------------------------------------------------------- WebKit（iPhone 相当）
-const wb = await webkit.launch(), wp = await open(wb, { isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+const sb = await chromium.launch(MUTE_LAUNCH); await slowTests({ browser: sb, bName: 'chromium', URL0, t, opts: { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } }); await sb.close()
+const wb = await webkit.launch(); await slowTests({ browser: wb, bName: 'webkit', URL0, t, opts: { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } })
+const wp = await open(wb, { isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
 await t('WebKit: 2本指の touchmove を止める', async () => {
   const r = await wp.evaluate(() => { const e = new Event('touchmove', { cancelable: true, bubbles: true }); Object.defineProperty(e, 'touches', { value: [{}, {}] }); document.body.dispatchEvent(e); return e.defaultPrevented })
   expect(r, r)
