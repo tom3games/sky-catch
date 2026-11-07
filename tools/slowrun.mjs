@@ -1,4 +1,5 @@
 // 読み込みの確認だけ回す。node tools/slowrun.mjs（無音）
+import '../mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { chromium, webkit } from 'playwright'
 import { spawn } from 'node:child_process'
 import { MUTE_LAUNCH } from '../mute.mjs'

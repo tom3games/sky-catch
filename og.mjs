@@ -1,4 +1,5 @@
 // SNS 用の画像 og.png（1200x630）。壁に張り付いた隊員の真上に、手足をばたつかせた人が落ちてくる瞬間＋頭上注意の看板。node og.mjs
+import './mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { muteContext, MUTE_LAUNCH } from './mute.mjs'

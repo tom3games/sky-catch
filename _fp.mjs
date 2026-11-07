@@ -1,4 +1,5 @@
 // 一人称視点の検証と撮影。node _fp.mjs（テスト中は無音: mute.mjs）
+import './mute-auto.mjs'  // テスト中は絶対に音を出さない（playwright を無音に差し替え）
 import { chromium, webkit } from 'playwright'
 import { spawn } from 'node:child_process'
 import { MUTE_LAUNCH, muteContext } from './mute.mjs'
